@@ -1,0 +1,3621 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>ニッチ争奪ゲーム デジタル体験版</title>
+<style>
+/* ========================================
+   基本スタイル
+======================================== */
+*{ box-sizing:border-box; }
+body{ margin:0; font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif; background:#f6f6f6; }
+.wrap{ height:100svh; padding:12px; display:flex; flex-direction:column; gap:10px; }
+
+/* ヘッダー */
+header{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+h1{ font-size:16px; margin:0; }
+.small{ font-size:12px; color:#555; line-height:1.35; }
+button{ padding:8px 10px; border-radius:10px; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:12px; }
+button:disabled{ opacity:.55; cursor:not-allowed; }
+button:hover:not(:disabled){ background:#f0f0f0; }
+
+/* メインレイアウト */
+.main{
+  flex:1; min-height:0;
+  display:grid; gap:10px;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto;
+}
+@media (min-width: 900px){
+  .main{ grid-template-columns: 1fr 480px; grid-template-rows: 1fr; }
+}
+
+.panel{ background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; overflow:hidden; min-height:0; display:flex; flex-direction:column; }
+
+/* ========================================
+   盤面
+======================================== */
+.stage{ display:flex; align-items:center; justify-content:center; flex:1; min-height:0; overflow:hidden; }
+#board{ position:relative; width:600px; height:600px; contain: layout paint; }
+#board img.board{ width:100%; height:100%; display:block; object-fit:contain; pointer-events:none; user-select:none; }
+
+.cell{ position:absolute; cursor:pointer; }
+.cell.disabled{
+  pointer-events: none;
+}
+.cell.disabled::after{
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  border-radius: 4px;
+  z-index: 20;
+}
+.cell.disabled .tokenWrap{
+  pointer-events: none;
+}
+/* 条件未達成（マス自体は置けるが効果条件を満たさない） */
+.cell.condition-not-met{
+  pointer-events: none;
+}
+.cell.condition-not-met::after{
+  content: '条件未達成';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ff0000;
+  font-size: clamp(10px, 2.5vmin, 22px);
+  font-weight: 900;
+  text-shadow: 
+    -1px -1px 0 #fff,
+    1px -1px 0 #fff,
+    -1px 1px 0 #fff,
+    1px 1px 0 #fff,
+    0 0 6px #fff,
+    0 0 10px #fff;
+  z-index: 10;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.cell.condition-not-met .tokenWrap{
+  pointer-events: none;
+}
+
+/* 効果選択可能マス（E03などで選択肢となるマス） */
+.cell.effect-selectable{
+  cursor: pointer;
+}
+.cell.effect-selectable::after{
+  content: '選択可';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9c27b0;
+  font-size: clamp(10px, 2.5vmin, 20px);
+  font-weight: 900;
+  text-shadow: 
+    -1px -1px 0 #fff,
+    1px -1px 0 #fff,
+    -1px 1px 0 #fff,
+    1px 1px 0 #fff,
+    0 0 6px #fff;
+  z-index: 10;
+  background: rgba(156, 39, 176, 0.15);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* 盤面トークン */
+.tokenWrap{
+  position:absolute;
+  inset: 8%;
+  border-radius: 12px;
+  overflow: visible;
+  display:none;
+  border: 3px solid transparent;
+  cursor: pointer;
+}
+.tokenWrap.owner-P{
+  border-color: #2196F3;
+  box-shadow: 0 2px 8px rgba(33,150,243,.4);
+}
+.tokenWrap.owner-C{
+  border-color: #f44336;
+  box-shadow: 0 2px 8px rgba(244,67,54,.4);
+}
+.tokenWrap.owner-none{
+  border-color: #888;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+
+img.token{
+  width:100%; height:100%;
+  object-fit:contain;
+  display:block;
+  pointer-events:none;
+  border-radius: 8px;
+}
+
+/* 所有者ラベル（トークン上部） */
+.ownerLabel{
+  position:absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 6px;
+  pointer-events:none;
+  user-select:none;
+  white-space: nowrap;
+}
+.ownerLabel.owner-P{
+  background: #2196F3;
+  color: #fff;
+}
+.ownerLabel.owner-C{
+  background: #f44336;
+  color: #fff;
+}
+
+/* ペナルティラベル（トークン中央に表示） */
+.penaltyLabel{
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(10px, 2.5vmin, 20px);
+  font-weight: 900;
+  color: #d32f2f;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  text-shadow: 
+    0 0 8px rgba(255, 255, 255, 0.9),
+    0 0 12px rgba(255, 255, 255, 0.9),
+    0 0 16px rgba(255, 255, 255, 0.8),
+    -2px -2px 4px rgba(255, 255, 255, 0.8),
+    2px -2px 4px rgba(255, 255, 255, 0.8),
+    -2px 2px 4px rgba(255, 255, 255, 0.8),
+    2px 2px 4px rgba(255, 255, 255, 0.8);
+}
+
+/* ========================================
+   右パネル（情報・手札・ログ）
+======================================== */
+.row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.score{ font-weight:700; font-size:22px; display:flex; align-items:center; gap:8px; }
+.score .player-score{ color: #2196F3; }
+.score .cpu-score{ color: #f44336; }
+.score .vs{ color: #666; font-size:16px; }
+
+/* カード情報表示エリア */
+#infoBox{
+  background:#fafafa;
+  border:1px solid #eee;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size:12px;
+  margin: 8px 0;
+  min-height: 60px;
+  line-height: 1.5;
+}
+#infoBox .card-title{
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+#infoBox .card-detail{
+  color: #555;
+}
+#infoBox .effect-type{
+  font-weight: 700;
+  color: #1976D2;
+}
+#infoBox .effect-type-condition{
+  font-weight: 700;
+  color: #d32f2f;
+}
+#infoBox .effect-type-special{
+  font-weight: 700;
+  color: #2e7d32;
+}
+#infoBox .effect-type-none{
+  font-weight: 700;
+  color: #333;
+}
+#infoBox .message{
+  color: #666;
+}
+#infoBox .message-cpu{
+  color: #d32f2f;
+  font-weight: 700;
+}
+#infoBox .message-effect{
+  color: #9c27b0;
+  font-weight: 700;
+}
+#infoBox .message-effect .effect-card-name{
+  font-size: 14px;
+  font-weight: 700;
+  color: #9c27b0;
+  margin-bottom: 4px;
+}
+#infoBox .message-effect .effect-card-text{
+  font-size: 12px;
+  font-weight: 400;
+  color: #666;
+  margin-bottom: 4px;
+}
+#infoBox .message-effect .effect-instruction{
+  font-size: 13px;
+  font-weight: 700;
+  color: #9c27b0;
+}
+
+.handTitleRow{ display:flex; align-items:center; gap:10px; margin:6px 0; }
+.handTitle{ font-size:15px; font-weight:700; color:#333; }
+.handTitle .small-note{ font-size:12px; font-weight:400; color:#555; }
+.btn-cancel{ padding:4px 10px; font-size:11px; border-radius:6px; background:#ffebee; border:1px solid #f44336; color:#c62828; }
+.btn-cancel:hover{ background:#ffcdd2; }
+.hand{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+
+/* 手札カード */
+.handCard{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:4px;
+  padding:4px;
+  border-radius:10px;
+  background:#fafafa;
+  border:2px solid transparent;
+}
+.handCard.selected-faceup{ border-color:#4CAF50; background:rgba(76,175,80,.1); }
+.handCard.selected-facedown{ border-color:#FF9800; background:rgba(255,152,0,.1); }
+
+.handCard img{
+  width: 120px;
+  height: 168px;
+  object-fit:contain;
+  display:block;
+  border-radius:6px;
+  cursor:pointer;
+  background: #f0f0f0;
+  transition: transform 0.1s;
+}
+.handCard img:hover{ transform:scale(1.03); }
+
+.handCard .buttons{
+  display:flex;
+  flex-direction: column;
+  gap:3px;
+  width: 100%;
+}
+.handCard .buttons button{
+  padding:7px 6px;
+  font-size:14px;
+  font-weight:700;
+  border-radius:6px;
+  width: 100%;
+}
+.btn-faceup{ background:#E8F5E9; border-color:#4CAF50; color:#2E7D32; }
+.btn-faceup:hover:not(:disabled){ background:#C8E6C9; }
+.btn-faceup.active{ background:#4CAF50; color:#fff; }
+
+.btn-facedown{ background:#FFF3E0; border-color:#FF9800; color:#E65100; }
+.btn-facedown:hover:not(:disabled){ background:#FFE0B2; }
+.btn-facedown.active{ background:#FF9800; color:#fff; }
+
+/* ログ */
+.logTitle{ font-size:15px; font-weight:700; color:#333; margin:10px 0 6px 0; }
+#log{
+  flex: 1;
+  min-height: 80px;
+  max-height: 200px;
+  overflow:auto;
+  background:#fafafa;
+  border:1px solid #eee;
+  border-radius: 12px;
+  padding: 8px;
+  font-size:12px;
+}
+.log-player{ color: #1976D2; }
+.log-cpu{ color: #d32f2f; }
+.log-effect{ color: #9c27b0; font-weight: 700; }
+.warn{ color:#b00020; font-weight:700; }
+
+/* 下部ボタン */
+.bottom-buttons{
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.bottom-buttons button{
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* ========================================
+   カード拡大モーダル
+======================================== */
+.modal-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.7);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:4000;
+  opacity:0;
+  pointer-events:none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.show{
+  opacity:1;
+  pointer-events:auto;
+}
+.modal-content{
+  position:relative;
+  max-width:90vw;
+  max-height:90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  padding: 40px 20px 20px 20px;
+}
+.modal-content img{
+  max-width:100%;
+  max-height:85vh;
+  border-radius:12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.3);
+}
+.modal-close{
+  position:absolute;
+  top:8px;
+  right:8px;
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  border:none;
+  background:#fff;
+  font-size:20px;
+  cursor:pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index: 100;
+}
+.modal-close:hover{ background:#f0f0f0; }
+
+/* 複数カード表示用（E05効果など） */
+.modal-cards{
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.modal-cards img{
+  max-width: 200px;
+  max-height: 50vh;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.3);
+  object-fit: contain;
+}
+.modal-title{
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-shadow: 0 2px 4px rgba(0,0,0,.5);
+}
+
+/* プレイヤー選択ダイアログ（E06用） */
+.select-player-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+}
+.select-player-overlay.hidden{
+  display: none;
+}
+.select-player-content{
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px 32px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,.3);
+}
+.select-player-title{
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #333;
+}
+.select-player-buttons{
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+.select-player-btn{
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.select-player-btn:first-child{
+  background: #4CAF50;
+  color: #fff;
+}
+.select-player-btn:last-child{
+  background: #f44336;
+  color: #fff;
+}
+.select-player-btn:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+
+/* ボードクローン用スタイル */
+.board-clone{
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.3);
+  overflow: hidden;
+}
+
+/* ========================================
+   モバイル対応（iPhone等の縦長端末）
+======================================== */
+@media (max-width: 899px){
+  body{ overflow:auto; }
+  .wrap{ height:auto; min-height:100svh; }
+  .main{ grid-template-rows: auto auto; }
+  .panel{ overflow: visible; padding: 8px; }
+  .stage{ overflow: auto; -webkit-overflow-scrolling: touch; flex: none; }
+  #log{ flex: none; height: 120px; min-height: 120px; max-height: 120px; }
+  .hand{ gap: 6px; }
+  .handCard{ padding: 3px; gap: 3px; }
+  .handCard img{ width: 95px; height: 133px; }
+  .handCard .buttons{ gap: 2px; }
+  .handCard .buttons button{ padding: 4px 3px; font-size: 10px; }
+}
+
+/* さらに小さい画面（iPhone SE等） */
+@media (max-width: 399px){
+  .handCard img{ width: 85px; height: 119px; }
+  .handCard .buttons button{ padding: 3px 2px; font-size: 9px; }
+}
+
+/* PC向け：画面高さが小さい場合 */
+@media (min-width: 900px) and (max-height: 700px){
+  #log{ max-height: 120px; }
+  .handCard img{ width: 100px; height: 140px; }
+}
+@media (min-width: 900px) and (max-height: 600px){
+  #log{ max-height: 80px; min-height: 60px; }
+  .handCard img{ width: 90px; height: 126px; }
+  #infoBox{ min-height: 50px; }
+}
+
+/* ========================================
+   配置エフェクト
+======================================== */
+/* 何もないマスに置く：弾む登場 */
+@keyframes effectBounceIn {
+  0% { transform: scale(0); }
+  40% { transform: scale(1.2); }
+  60% { transform: scale(0.9); }
+  80% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.effect-place {
+  animation: effectBounceIn 1s ease-out forwards;
+}
+
+/* 上書き：スライドイン + 衝撃波シェイク */
+@keyframes effectSlideIn {
+  0% { transform: translateX(-60px) rotate(-10deg); opacity: 0; }
+  50% { transform: translateX(5px) rotate(2deg); opacity: 1; }
+  70% { transform: translateX(0) rotate(0); }
+  100% { transform: translateX(0) rotate(0); }
+}
+@keyframes effectShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px) rotate(-2deg); }
+  40% { transform: translateX(6px) rotate(2deg); }
+  60% { transform: translateX(-4px) rotate(-1deg); }
+  80% { transform: translateX(4px) rotate(1deg); }
+}
+@keyframes effectShockwave {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.effect-overwrite {
+  animation: effectSlideIn 0.7s ease-out forwards, effectShake 0.8s ease-out 0.7s;
+}
+/* プレイヤーの上書き：青系の波紋 */
+.effect-overwrite-player::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid #2196F3;
+  border-radius: 12px;
+  animation: effectShockwave 1s ease-out 0.7s forwards;
+  pointer-events: none;
+}
+/* CPUの上書き：赤系の波紋 */
+.effect-overwrite-cpu::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid #F44336;
+  border-radius: 12px;
+  animation: effectShockwave 1s ease-out 0.7s forwards;
+  pointer-events: none;
+}
+
+/* 裏向きで置く：プレスダウン */
+@keyframes effectPressDown {
+  0% { transform: translateY(-40px) scaleY(1.3); opacity: 0; }
+  50% { transform: translateY(5px) scaleY(0.85); opacity: 1; }
+  70% { transform: translateY(-2px) scaleY(1.05); }
+  100% { transform: translateY(0) scaleY(1); }
+}
+.effect-facedown {
+  animation: effectPressDown 0.8s ease-out forwards;
+}
+
+/* カード効果で裏向きになるとき */
+.effect-flip-facedown {
+  animation: effectPressDown 0.8s ease-out forwards;
+}
+
+/* ========================================
+   スタート画面
+======================================== */
+.start-screen{
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #424242 0%, #303030 50%, #212121 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 2000;
+  padding: 20px 20px 40px 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: 20px;
+}
+.start-screen.hidden{
+  display: none;
+}
+.start-logo{
+  max-width: 95%;
+  width: 500px;
+  margin-top: 0;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.start-description{
+  text-align: center;
+  font-size: 14px;
+  color: #333;
+  line-height: 1.8;
+  margin-bottom: 0;
+  background: rgba(255,255,255,0.9);
+  padding: 16px 24px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.start-buttons{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.start-buttons button{
+  padding: 14px 40px;
+  font-size: 18px;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 2px solid #2e7d32;
+  background: #fff;
+  color: #2e7d32;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 200px;
+}
+.start-buttons button:hover{
+  background: #2e7d32;
+  color: #fff;
+}
+.start-credit{
+  font-size: 16px;
+  color: #aaa;
+  line-height: 1.6;
+  flex-shrink: 0;
+  text-align: center;
+}
+.start-credit-main{
+  font-size: 18px;
+}
+.start-credit-note{
+  font-size: 14px;
+}
+
+/* ルール説明モーダル */
+.rule-modal{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.rule-modal.show{
+  opacity: 1;
+  pointer-events: auto;
+}
+.rule-content{
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  width: 500px;
+}
+.rule-content h2{
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #2e7d32;
+  text-align: center;
+}
+.rule-content p{
+  margin: 0 0 8px 0;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.rule-content .rule-section{
+  margin-bottom: 16px;
+}
+.rule-content .rule-section h3{
+  font-size: 15px;
+  color: #333;
+  margin: 0 0 8px 0;
+}
+.rule-content .rule-indent{
+  padding-left: 1em;
+  text-indent: -1em;
+  margin-left: 1em;
+}
+.rule-content .rule-note{
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  margin-top: 16px;
+}
+.rule-close{
+  display: block;
+  margin: 20px auto 0;
+  padding: 10px 30px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+.rule-close:hover{
+  background: #f0f0f0;
+}
+
+/* ========================================
+   リザルト画面
+======================================== */
+.result-screen{
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #424242 0%, #303030 50%, #212121 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2500;
+  padding: 20px;
+  overflow-y: auto;
+}
+.result-screen.hidden{
+  display: none;
+}
+.result-content{
+  background: rgba(255,255,255,0.95);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 600px;
+  width: 95%;
+  margin: 20px 0;
+}
+.result-title{
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 16px;
+}
+.result-score{
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.result-score .player-score{ color: #2196F3; }
+.result-score .cpu-score{ color: #f44336; }
+.result-score .vs{ color: #666; font-size: 18px; margin: 0 8px; }
+.result-winner{
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  padding: 10px;
+  border-radius: 8px;
+}
+.result-winner.player-win{ background: #E3F2FD; color: #1976D2; }
+.result-winner.cpu-win{ background: #FFEBEE; color: #d32f2f; }
+.result-winner.draw{ background: #FFF3E0; color: #F57C00; }
+.result-animals-section{
+  text-align: left;
+  margin: 16px 0;
+}
+.result-animals-title{
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 12px 0;
+  text-align: left;
+}
+.result-habitat{
+  margin-bottom: 8px;
+}
+.result-habitat-name{
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+.result-habitat-name.wetland{ color: #00BCD4; }
+.result-habitat-name.grassland{ color: #CDDC39; background: none; }
+.result-habitat-name.forest{ color: #8BC34A; }
+.result-animal-list{
+  font-size: 13px;
+  color: #555;
+  line-height: 1.6;
+  padding-left: 0;
+}
+.result-evaluation{
+  margin-top: 16px;
+  text-align: left;
+}
+.eval-total{
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 8px;
+}
+.eval-text{
+  font-size: 14px;
+  color: #555;
+  line-height: 1.6;
+}
+.result-btn-board{
+  display: block;
+  margin: 20px auto;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 2px solid #1976D2;
+  background: #fff;
+  color: #1976D2;
+  cursor: pointer;
+}
+.result-btn-board:hover{
+  background: #1976D2;
+  color: #fff;
+}
+.result-description{
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.8;
+  margin: 20px 0;
+  text-align: left;
+}
+.result-description p{
+  margin: 0 0 8px 0;
+}
+.result-btn-title{
+  display: block;
+  margin: 20px auto 0;
+  padding: 14px 40px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 2px solid #2e7d32;
+  background: #fff;
+  color: #2e7d32;
+  cursor: pointer;
+}
+.result-btn-title:hover{
+  background: #2e7d32;
+  color: #fff;
+}
+</style>
+</head>
+
+<body>
+<!-- スタート画面 -->
+<div class="start-screen" id="startScreen">
+  <img class="start-logo" src="images/rogo.png" alt="ニッチ争奪ゲーム デジタル体験版">
+  <div class="start-description" style="text-align: left;">
+    京都府に生息する動物を題材に、<br>
+    生態的地位や外来生物問題などを体感的に学べます。<br>
+    このデジタル体験版(1人用)は、<br>
+    ゲーム内容や流れを確認するためのものです。<br>
+    正式なボードゲーム版は、<br>
+    複数人(4人程度)でプレイすることを想定しています。
+  </div>
+  <div class="start-buttons">
+    <button id="btnStart">ゲーム開始</button>
+    <button id="btnRule">ルール説明</button>
+  </div>
+  <div class="start-credit">
+    <div class="start-credit-main">制作： 特殊活動友の会（2026）</div>
+    <div class="start-credit-note">　　　※ ゲーム中の写真はすべて制作者による撮影</div>
+  </div>
+</div>
+
+<!-- ルール説明モーダル -->
+<div class="rule-modal" id="ruleModal">
+  <div class="rule-content">
+    <h2>ニッチ争奪ゲーム ルール説明</h2>
+    <div class="rule-section">
+      <h3>■ ゲームの目的</h3>
+      <p>　生活空間と食物を組み合わせた計16タイプの生態的地位(ニッチ)を、手札の動物カードを使って埋め、合計得点を競う。（デジタル体験版はCPUとの1対1）</p>
+    </div>
+    <div class="rule-section">
+      <h3>■ ターンの流れ</h3>
+      <p>　手札から1枚選び、条件に合うマスに置く。</p>
+      <p>　その後、山札から1枚引いて手札を3枚にする。</p>
+      <p>（1）すでにカードが置いてあるマスでも、競争力が相手より高ければ上書きできる。（Aが最高）</p>
+      <p>（2）条件に合うカードがない場合などは、手札から1枚選んで空きマスに裏向きで置くこともできる。（裏向きは0点）</p>
+      <p>（3）裏向きカードがあるマスにはカードを置けない。</p>
+      <p>（4）置く条件がある、置いたときに効果が発生するカードもある。</p>
+    </div>
+    <div class="rule-section">
+      <h3>■ ゲームの終了</h3>
+      <p>　すべてのマスが埋まったらゲーム終了。</p>
+      <p>　表向きカードの得点を合計し、得点が高い方が勝利する。</p>
+    </div>
+    <p class="rule-note">※ デジタル体験版は、事前確認・体験用として作られています。</p>
+    <button class="rule-close" id="btnRuleClose">閉じる</button>
+  </div>
+</div>
+
+<!-- リザルト画面 -->
+<div class="result-screen hidden" id="resultScreen">
+  <div class="result-content">
+    <div class="result-title">ゲーム終了</div>
+    <div class="result-score">
+      <span class="player-score">あなた <span id="resultScoreP">0</span> 点</span>
+      <span class="vs">vs</span>
+      <span class="cpu-score">CPU <span id="resultScoreC">0</span> 点</span>
+    </div>
+    <div class="result-winner" id="resultWinner"></div>
+    <div class="result-animals-section">
+      <div class="result-animals-title">生息していた動物</div>
+      <div id="resultAnimals"></div>
+    </div>
+    <button class="result-btn-board" id="btnShowBoard">ゲームボードを見る</button>
+    <div class="result-description">
+      <p>　本ゲームは、複数人(4人程度)でのプレイを通して、種間競争や共存、外来生物問題など、生態的地位(ニッチ)に関わる事象を体験することを目的としたボードゲームです。</p>
+      <p>　授業やワークショップで利用する場合は、現物のボードゲームの使用をおすすめしています。</p>
+      <p>※ 現物のレンタルについては、配布資料をご覧ください。</p>
+    </div>
+    <button class="result-btn-title" id="btnResultTitle">タイトルに戻る</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header>
+  </header>
+
+  <div class="main">
+    <!-- 盤面エリア -->
+    <section class="panel">
+      <div class="stage">
+        <div id="board">
+          <img class="board" src="images/board.png" alt="board">
+        </div>
+      </div>
+    </section>
+
+    <!-- 情報パネル -->
+    <section class="panel">
+      <div class="row">
+        <div class="score">
+          <span class="player-score">あなた <span id="scoreP">0</span> 点</span>
+          <span class="vs">vs</span>
+          <span class="cpu-score">CPU <span id="scoreC">0</span> 点</span>
+        </div>
+        <div class="small">残り山札：<span id="deckCount">0</span>枚</div>
+      </div>
+
+      <div id="infoBox"><span class="message">手札を選択してください</span></div>
+
+      <div class="handTitleRow">
+        <span class="handTitle">あなたの手札 <span class="small-note">（画像タップで拡大）</span></span>
+        <button id="btnCancel" class="btn-cancel" style="display:none;">キャンセル</button>
+      </div>
+      <div class="hand" id="handP"></div>
+
+      <div class="bottom-buttons">
+        <button id="btnRuleGame">ルール説明</button>
+        <button id="btnNew">タイトルに戻る</button>
+      </div>
+
+      <div class="logTitle">ゲームログ</div>
+      <div id="log"></div>
+    </section>
+  </div>
+</div>
+
+<!-- プレイヤー選択ダイアログ（E06用） -->
+<div class="select-player-overlay hidden" id="selectPlayerDialog">
+  <div class="select-player-content">
+    <div class="select-player-title">効果の対象を選んでください</div>
+    <div class="select-player-buttons">
+      <button class="select-player-btn" id="btnSelectSelf">自分</button>
+      <button class="select-player-btn" id="btnSelectCPU">CPU</button>
+    </div>
+  </div>
+</div>
+
+<!-- カード拡大モーダル -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-content">
+    <button class="modal-close" id="modalClose">×</button>
+    <img id="modalImg" src="" alt="カード拡大">
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ========================================
+     カードデータ（CSV埋め込み・生活空間/食性追加）
+  ======================================== */
+  const CARD_DATA = [
+    { id:"AN01", hand:"card01", token:"token01", name:"アオサギ", spaces:["湿地"], diets:["虫","小動物"], allowed:"9,13", power:"B", points:3, note:"", effect_id:"E05", effect_type:"置いたとき", effect_text:"プレイヤーを１人選び、その手札を見る。" },
+    { id:"AN02", hand:"card02", token:"token02", name:"アオサギ", spaces:["湿地"], diets:["虫","小動物"], allowed:"9,13", power:"B", points:3, note:"", effect_id:"E05", effect_type:"置いたとき", effect_text:"プレイヤーを１人選び、その手札を見る。" },
+    { id:"AN03", hand:"card03", token:"token03", name:"アオダイショウ", spaces:["草原","樹上"], diets:["小動物"], allowed:"14,16", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN04", hand:"card04", token:"token04", name:"アオバト", spaces:["樹上"], diets:["果実・種子","虫"], allowed:"8,12", power:"C", points:4, note:"", effect_id:"C01", effect_type:"置く条件", effect_text:"[樹上]に２種以上の動物がいる。" },
+    { id:"AN05", hand:"card05", token:"token05", name:"アカギツネ", spaces:["草原"], diets:["小動物"], allowed:"14", power:"C", points:4, note:"", effect_id:"C02", effect_type:"置く条件", effect_text:"[草原]に１枚以上の動物がいる。" },
+    { id:"AN06", hand:"card06", token:"token06", name:"アカネズミ", spaces:["林床"], diets:["葉","果実・種子","虫"], allowed:"3,7,11", power:"B", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN07", hand:"card07", token:"token07", name:"アカハライモリ", spaces:["湿地"], diets:["虫"], allowed:"9", power:"C", points:4, note:"", effect_id:"C03", effect_type:"置く条件", effect_text:"全体で３種以上の動物がいる。" },
+    { id:"AN08", hand:"card08", token:"token08", name:"アカミミガメ", spaces:["湿地"], diets:["葉","虫","小動物"], allowed:"1,9,13", power:"A", points:1, note:"", effect_id:"E01", effect_type:"置いたとき", effect_text:"ニホンイシガメがいるなら、それを裏向きにする。" },
+    { id:"AN09", hand:"card09", token:"token09", name:"アカミミガメ", spaces:["湿地"], diets:["葉","虫","小動物"], allowed:"1,9,13", power:"A", points:1, note:"", effect_id:"E01", effect_type:"置いたとき", effect_text:"ニホンイシガメがいるなら、それを裏向きにする。" },
+    { id:"AN10", hand:"card10", token:"token10", name:"アメリカザリガニ", spaces:["湿地"], diets:["葉","虫","小動物"], allowed:"1,9,13", power:"A", points:1, note:"", effect_id:"R02", effect_type:"特別ルール", effect_text:"これは、裏向きカードの上に重ねて出すことができる。" },
+    { id:"AN11", hand:"card11", token:"token11", name:"アメリカザリガニ", spaces:["湿地"], diets:["葉","虫","小動物"], allowed:"1,9,13", power:"A", points:1, note:"", effect_id:"R02", effect_type:"特別ルール", effect_text:"これは、裏向きカードの上に重ねて出すことができる。" },
+    { id:"AN12", hand:"card12", token:"token12", name:"アライグマ", spaces:["湿地","林床","樹上"], diets:["果実・種子","虫","小動物"], allowed:"5,7,8,9,11,12,13,15,16", power:"A", points:1, note:"", effect_id:"E02", effect_type:"置いたとき", effect_text:"[樹上]にこれでない動物がいるなら、１枚選んで裏向きにする。" },
+    { id:"AN13", hand:"card13", token:"token13", name:"アライグマ", spaces:["湿地","林床","樹上"], diets:["果実・種子","虫","小動物"], allowed:"5,7,8,9,11,12,13,15,16", power:"A", points:1, note:"", effect_id:"E02", effect_type:"置いたとき", effect_text:"[樹上]にこれでない動物がいるなら、１枚選んで裏向きにする。" },
+    { id:"AN14", hand:"card14", token:"token14", name:"イノシシ", spaces:["草原","林床"], diets:["葉","果実・種子"], allowed:"2,3,6,7", power:"B", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN15", hand:"card15", token:"token15", name:"イノシシ", spaces:["草原","林床"], diets:["葉","果実・種子"], allowed:"2,3,6,7", power:"B", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN16", hand:"card16", token:"token16", name:"ウシガエル", spaces:["湿地"], diets:["虫","小動物"], allowed:"9,13", power:"A", points:1, note:"無尾目", effect_id:"E03", effect_type:"置いたとき", effect_text:"[湿地]に空きがあるなら、そこから１つ選んで山札の一番上を裏向きで置く。" },
+    { id:"AN17", hand:"card17", token:"token17", name:"キジ", spaces:["草原","林床"], diets:["果実・種子","虫"], allowed:"6,7,10,11", power:"B", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN18", hand:"card18", token:"token18", name:"キジバト", spaces:["草原","樹上"], diets:["果実・種子","虫"], allowed:"6,8,10,12", power:"B", points:2, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN19", hand:"card19", token:"token19", name:"キジバト", spaces:["草原","樹上"], diets:["果実・種子","虫"], allowed:"6,8,10,12", power:"B", points:2, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN20", hand:"card20", token:"token20", name:"クロゲンゴロウ", spaces:["湿地"], diets:["虫"], allowed:"9", power:"D", points:5, note:"", effect_id:"C04", effect_type:"置く条件", effect_text:"[湿地]に２種以上の動物がいる。" },
+    { id:"AN21", hand:"card21", token:"token21", name:"コガネグモ", spaces:["湿地","草原"], diets:["虫"], allowed:"9,10", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN22", hand:"card22", token:"token22", name:"コサギ", spaces:["湿地"], diets:["虫","小動物"], allowed:"9,13", power:"C", points:3, note:"", effect_id:"E05", effect_type:"置いたとき", effect_text:"プレイヤーを１人選び、その手札を見る。" },
+    { id:"AN23", hand:"card23", token:"token23", name:"シベリアイタチ", spaces:["草原","林床","樹上"], diets:["果実・種子","小動物"], allowed:"6,7,8,14,15,16", power:"B", points:2, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN24", hand:"card24", token:"token24", name:"シベリアイタチ", spaces:["草原","林床","樹上"], diets:["果実・種子","小動物"], allowed:"6,7,8,14,15,16", power:"B", points:2, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN25", hand:"card25", token:"token25", name:"シマヘビ", spaces:["草原","林床"], diets:["小動物"], allowed:"14,15", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN26", hand:"card26", token:"token26", name:"ジョロウグモ", spaces:["草原","樹上"], diets:["虫"], allowed:"10,12", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN27", hand:"card27", token:"token27", name:"ソウシチョウ", spaces:["林床","樹上"], diets:["果実・種子","虫"], allowed:"7,8,11,12", power:"A", points:1, note:"", effect_id:"R03", effect_type:"特別ルール", effect_text:"これと同じ生活空間にいる、これ以外の動物の得点が－１される。" },
+    { id:"AN28", hand:"card28", token:"token28", name:"タヌキ", spaces:["草原","林床"], diets:["果実・種子","虫"], allowed:"6,7,10,11", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN29", hand:"card29", token:"token29", name:"タヌキ", spaces:["草原","林床"], diets:["果実・種子","虫"], allowed:"6,7,10,11", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN30", hand:"card30", token:"token30", name:"ツキノワグマ", spaces:["林床","樹上"], diets:["葉","果実・種子","虫"], allowed:"3,4,7,8,11,12", power:"C", points:4, note:"", effect_id:"C05", effect_type:"置く条件", effect_text:"[林床]と[樹上]に計３枚以上の動物(同種も可)がいる。" },
+    { id:"AN31", hand:"card31", token:"token31", name:"ツグミ", spaces:["草原","樹上"], diets:["果実・種子","虫"], allowed:"6,8,10,12", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN32", hand:"card32", token:"token32", name:"テン", spaces:["林床","樹上"], diets:["果実・種子","小動物"], allowed:"7,8,15,16", power:"B", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN33", hand:"card33", token:"token33", name:"トノサマガエル", spaces:["湿地"], diets:["虫"], allowed:"9", power:"C", points:3, note:"無尾目", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN34", hand:"card34", token:"token34", name:"トノサマバッタ", spaces:["草原"], diets:["葉"], allowed:"2", power:"B", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN35", hand:"card35", token:"token35", name:"ニホンアナグマ", spaces:["林床"], diets:["果実・種子","虫"], allowed:"7,11", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN36", hand:"card36", token:"token36", name:"ニホンアマガエル", spaces:["湿地","草原","樹上"], diets:["虫"], allowed:"9,10,12", power:"C", points:3, note:"無尾目", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN37", hand:"card37", token:"token37", name:"ニホンアマガエル", spaces:["湿地","草原","樹上"], diets:["虫"], allowed:"9,10,12", power:"C", points:3, note:"無尾目", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN38", hand:"card38", token:"token38", name:"ニホンイシガメ", spaces:["湿地"], diets:["葉","果実・種子","虫"], allowed:"1,5,9", power:"D", points:5, note:"", effect_id:"C06", effect_type:"置く条件", effect_text:"全体で４種以上の動物がいる。" },
+    { id:"AN39", hand:"card39", token:"token39", name:"ニホンカナヘビ", spaces:["林床","樹上"], diets:["虫"], allowed:"11,12", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN40", hand:"card40", token:"token40", name:"ニホンザル", spaces:["草原","林床","樹上"], diets:["葉","果実・種子","虫"], allowed:"2,3,4,6,7,8,10,11,12", power:"B", points:3, note:"", effect_id:"E06", effect_type:"置いたとき", effect_text:"プレイヤー１人を選ぶ。そのプレイヤーは手札をすべて山札の下に置き、上から３枚引く。" },
+    { id:"AN41", hand:"card41", token:"token41", name:"ニホンジカ", spaces:["湿地","草原","林床"], diets:["葉"], allowed:"1,2,3", power:"B", points:2, note:"", effect_id:"R01", effect_type:"特別ルール", effect_text:"これを含めたニホンジカが全体で２枚以上いるなら、このカードの得点は１点になる。" },
+    { id:"AN42", hand:"card42", token:"token42", name:"ニホンジカ", spaces:["湿地","草原","林床"], diets:["葉"], allowed:"1,2,3", power:"B", points:2, note:"", effect_id:"R01", effect_type:"特別ルール", effect_text:"これを含めたニホンジカが全体で２枚以上いるなら、このカードの得点は１点になる。" },
+    { id:"AN43", hand:"card43", token:"token43", name:"ニホンジカ", spaces:["湿地","草原","林床"], diets:["葉"], allowed:"1,2,3", power:"B", points:2, note:"", effect_id:"R01", effect_type:"特別ルール", effect_text:"これを含めたニホンジカが全体で２枚以上いるなら、このカードの得点は１点になる。" },
+    { id:"AN44", hand:"card44", token:"token44", name:"ニホンジカ", spaces:["湿地","草原","林床"], diets:["葉"], allowed:"1,2,3", power:"B", points:2, note:"", effect_id:"R01", effect_type:"特別ルール", effect_text:"これを含めたニホンジカが全体で２枚以上いるなら、このカードの得点は１点になる。" },
+    { id:"AN45", hand:"card45", token:"token45", name:"ニホンジカ", spaces:["湿地","草原","林床"], diets:["葉"], allowed:"1,2,3", power:"B", points:2, note:"", effect_id:"R01", effect_type:"特別ルール", effect_text:"これを含めたニホンジカが全体で２枚以上いるなら、このカードの得点は１点になる。" },
+    { id:"AN46", hand:"card46", token:"token46", name:"ニホントカゲ", spaces:["草原"], diets:["虫"], allowed:"10", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN47", hand:"card47", token:"token47", name:"ニホンノウサギ", spaces:["草原"], diets:["葉"], allowed:"2", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN48", hand:"card48", token:"token48", name:"ニホンヒキガエル", spaces:["湿地","草原","林床"], diets:["虫"], allowed:"9,10,11", power:"C", points:4, note:"無尾目", effect_id:"C07", effect_type:"置く条件", effect_text:"全体で５枚以上の動物(同種も可)がいないと出せない。" },
+    { id:"AN49", hand:"card49", token:"token49", name:"ニホンマムシ", spaces:["湿地","林床"], diets:["小動物"], allowed:"13,15", power:"C", points:4, note:"", effect_id:"C08", effect_type:"置く条件", effect_text:"どこかに無尾目(カエル目)の動物がいる。" },
+    { id:"AN50", hand:"card50", token:"token50", name:"ニホンリス", spaces:["林床","樹上"], diets:["果実・種子"], allowed:"7,8", power:"D", points:4, note:"", effect_id:"C09", effect_type:"置く条件", effect_text:"[林床]と[樹上]に計２種以上の動物がいる。" },
+    { id:"AN51", hand:"card51", token:"token51", name:"ヌートリア", spaces:["湿地"], diets:["葉"], allowed:"1", power:"A", points:1, note:"", effect_id:"E04", effect_type:"置いたとき", effect_text:"[湿地]にこれでない動物がいるなら、１枚選んで裏向きにする。" },
+    { id:"AN52", hand:"card52", token:"token52", name:"ハクビシン", spaces:["林床","樹上"], diets:["果実・種子","虫","小動物"], allowed:"7,8,11,12,15,16", power:"B", points:2, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN53", hand:"card53", token:"token53", name:"ハクビシン", spaces:["林床","樹上"], diets:["果実・種子","虫","小動物"], allowed:"7,8,11,12,15,16", power:"B", points:2, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN54", hand:"card54", token:"token54", name:"ヒメネズミ", spaces:["樹上"], diets:["葉","果実・種子","虫"], allowed:"4,8,12", power:"B", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN55", hand:"card55", token:"token55", name:"ヒヨドリ", spaces:["樹上"], diets:["葉","果実・種子","虫"], allowed:"4,8,12", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN56", hand:"card56", token:"token56", name:"ムササビ", spaces:["樹上"], diets:["葉"], allowed:"4", power:"D", points:5, note:"", effect_id:"C10", effect_type:"置く条件", effect_text:"[林床]に[葉]を食べる動物がいる。" },
+    { id:"AN57", hand:"card57", token:"token57", name:"モズ", spaces:["草原"], diets:["虫"], allowed:"10", power:"C", points:3, note:"", effect_id:"N00", effect_type:"なし", effect_text:"" },
+    { id:"AN58", hand:"card58", token:"token58", name:"モリアオガエル", spaces:["湿地","樹上"], diets:["虫"], allowed:"9,12", power:"D", points:4, note:"無尾目", effect_id:"C11", effect_type:"置く条件", effect_text:"[湿地]に１種以上の動物がいる。" },
+    { id:"AN59", hand:"card59", token:"token59", name:"ヤマアカガエル", spaces:["湿地","草原","林床"], diets:["虫"], allowed:"9,10,11", power:"D", points:5, note:"無尾目", effect_id:"C12", effect_type:"置く条件", effect_text:"[湿地]と[林床]に計３種以上の動物がいる。" },
+    { id:"AN60", hand:"card60", token:"token60", name:"ヤマトサンショウウオ", spaces:["湿地","林床"], diets:["虫"], allowed:"9,11", power:"D", points:5, note:"", effect_id:"C13", effect_type:"置く条件", effect_text:"[湿地]と[林床]に計４種以上の動物がいる。" },
+  ];
+
+  /* ========================================
+     定数
+  ======================================== */
+  const HAND_DIR      = "images/cards/";
+  const TOKEN_DIR     = "images/boardcards/";
+  const TOKEN_BACK    = TOKEN_DIR + "token00.png";
+  const CARD_BACK     = HAND_DIR + "card00.png";
+  const FALLBACK_IMG  = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='140' viewBox='0 0 100 140'%3E%3Crect fill='%23ddd' width='100' height='140'/%3E%3Ctext x='50' y='70' text-anchor='middle' fill='%23999' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
+
+  const BASE       = 1814;
+  const OFFSET_X   = 369 / BASE;
+  const OFFSET_Y   = 369 / BASE;
+  const CELL_W     = 352 / BASE;
+  const CELL_H     = 352 / BASE;
+
+  const POWER_MAP  = { A: 4, B: 3, C: 2, D: 1 };
+  const HAND_SIZE  = 3;
+  const MAX_LOG    = 200;
+
+  // エフェクト時間定数
+  const EFFECT_DURATION = {
+    place: 1000,      // 弾む登場: 1秒
+    overwrite: 1800,  // スライドイン+シェイク: 0.7秒 + 0.8秒 + 余裕
+    facedown: 800,    // プレスダウン: 0.8秒
+    flipFacedown: 800 // 効果で裏向き: 0.8秒
+  };
+
+  /* ========================================
+     効果音システム
+  ======================================== */
+  let audioContext = null;
+
+  function getAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioContext;
+  }
+
+  // 基本音生成
+  function playTone(frequency, duration, type = 'sine', volume = 0.3) {
+    try {
+      const ctx = getAudioContext();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.frequency.value = frequency;
+      oscillator.type = type;
+      
+      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration / 1000);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + duration / 1000);
+    } catch (e) {
+      // エラーは無視（効果音が鳴らないだけ）
+    }
+  }
+
+  // スイープ音（周波数が変化）
+  function playSweep(startFreq, endFreq, duration, type = 'sine', volume = 0.3) {
+    try {
+      const ctx = getAudioContext();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.frequency.setValueAtTime(startFreq, ctx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + duration / 1000);
+      oscillator.type = type;
+      
+      gainNode.gain.setValueAtTime(volume, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration / 1000);
+      
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + duration / 1000);
+    } catch (e) {
+      // エラーは無視
+    }
+  }
+
+  // 効果音: ゲーム開始
+  function playSoundGameStart() {
+    playSweep(4000, 4150, 120, 'sine', 0.35);
+    setTimeout(() => {
+      playSweep(3500, 3670, 500, 'sine', 0.35);
+    }, 150);
+  }
+
+  // 効果音: 表向き配置
+  function playSoundPlaceFaceup() {
+    for (let i = 0; i < 5; i++) {
+      setTimeout(() => {
+        playTone(80 + Math.random() * 80, 35, 'sawtooth', 0.12);
+      }, i * 45);
+    }
+  }
+
+  // 効果音: 上書き（前半：ガサガサ）
+  function playSoundOverwritePart1() {
+    playSoundPlaceFaceup();
+  }
+
+  // 効果音: 上書き（後半：爆発）
+  function playSoundOverwritePart2() {
+    playSweep(200, 30, 200, 'sawtooth', 0.4);
+    setTimeout(() => {
+      playTone(100, 80, 'square', 0.25);
+    }, 50);
+  }
+
+  // 効果音: 裏向き配置
+  function playSoundPlaceFacedown() {
+    playTone(100, 80, 'square', 0.3);
+  }
+
+  // 効果音: 効果発動
+  function playSoundEffect() {
+    playTone(880, 150, 'sine', 0.25);
+    setTimeout(() => {
+      playTone(1108, 150, 'sine', 0.25);
+    }, 80);
+  }
+
+  // 効果音: ゲーム終了
+  function playSoundGameEnd() {
+    playSweep(4000, 4150, 120, 'sine', 0.35);
+    setTimeout(() => {
+      playSweep(3500, 3670, 500, 'sine', 0.35);
+    }, 150);
+  }
+
+  // カードIDから手札画像パスを引くためのマップ
+  const cardIdToHandImg = {};
+
+  /* ========================================
+     DOM要素
+  ======================================== */
+  const $board     = document.getElementById("board");
+  const $handP     = document.getElementById("handP");
+  const $log       = document.getElementById("log");
+  const $infoBox   = document.getElementById("infoBox");
+  const $scoreP    = document.getElementById("scoreP");
+  const $scoreC    = document.getElementById("scoreC");
+  const $deckCount = document.getElementById("deckCount");
+  const $btnNew    = document.getElementById("btnNew");
+  const $btnCancel = document.getElementById("btnCancel");
+  const $modal     = document.getElementById("modal");
+  const $modalImg  = document.getElementById("modalImg");
+  const $modalClose = document.getElementById("modalClose");
+
+  // スタート画面用
+  const $startScreen = document.getElementById("startScreen");
+  const $btnStart    = document.getElementById("btnStart");
+  const $btnRule     = document.getElementById("btnRule");
+  const $ruleModal   = document.getElementById("ruleModal");
+  const $btnRuleClose = document.getElementById("btnRuleClose");
+  const $btnRuleGame = document.getElementById("btnRuleGame");
+
+  // リザルト画面用
+  const $resultScreen = document.getElementById("resultScreen");
+  const $resultScoreP = document.getElementById("resultScoreP");
+  const $resultScoreC = document.getElementById("resultScoreC");
+  const $resultWinner = document.getElementById("resultWinner");
+  const $resultAnimals = document.getElementById("resultAnimals");
+  const $btnShowBoard = document.getElementById("btnShowBoard");
+  const $btnResultTitle = document.getElementById("btnResultTitle");
+
+  // E06プレイヤー選択ダイアログ用
+  const $selectPlayerDialog = document.getElementById("selectPlayerDialog");
+  const $btnSelectSelf = document.getElementById("btnSelectSelf");
+  const $btnSelectCPU = document.getElementById("btnSelectCPU");
+
+  /* ========================================
+     ゲーム状態
+  ======================================== */
+  let allCards = [];
+  let deck     = [];
+  let handP    = [];
+  let handC    = [];
+  let board    = [];
+  let selectedHandIndex = null;
+  let selectedMode = null;
+  let currentTurn  = "P";
+  let gameOver     = false;
+  let scoreP = 0;
+  let scoreC = 0;
+
+  // 効果選択モード（E03など、プレイヤーがマスを選ぶ必要がある効果用）
+  let effectSelectMode = null; // null or { type: "E03", validCells: [...] }
+
+  // 遅延実行タイマーID（タイトルに戻るときにキャンセルするため）
+  let resultScreenTimerId = null;
+  let cpuTurnTimerId = null;
+  let effectDelayTimerId = null;
+
+  const cellViews = [];
+
+  /* ========================================
+     ログシステム
+  ======================================== */
+  const logQueue = [];
+  let logScheduled = false;
+
+  function log(msg, type = "normal") {
+    logQueue.push({ msg: String(msg), type });
+    if (!logScheduled) {
+      logScheduled = true;
+      requestAnimationFrame(flushLog);
+    }
+  }
+
+  function flushLog() {
+    logScheduled = false;
+    if (logQueue.length === 0) return;
+
+    const frag = document.createDocumentFragment();
+    while (logQueue.length) {
+      const { msg, type } = logQueue.shift();
+      const div = document.createElement("div");
+      
+      if (type === "warn") {
+        const span = document.createElement("span");
+        span.className = "warn";
+        span.textContent = "⚠ ";
+        div.appendChild(span);
+      } else if (type === "player") {
+        div.className = "log-player";
+      } else if (type === "cpu") {
+        div.className = "log-cpu";
+      } else if (type === "effect") {
+        div.className = "log-effect";
+      }
+      
+      div.appendChild(document.createTextNode(msg));
+      frag.appendChild(div);
+    }
+    $log.appendChild(frag);
+
+    while ($log.childNodes.length > MAX_LOG) {
+      $log.removeChild($log.firstChild);
+    }
+    $log.scrollTop = $log.scrollHeight;
+  }
+
+  /* ========================================
+     ユーティリティ関数
+  ======================================== */
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function powerToNum(p) {
+    return POWER_MAP[(p ?? "").toString().trim()] ?? 0;
+  }
+
+  function parseAllowedMask(raw) {
+    const s = (raw ?? "").toString().trim();
+    if (!s) return 0;
+    let mask = 0;
+    for (const part of s.split(",")) {
+      const n = Number(part.trim());
+      if (Number.isFinite(n) && n >= 1 && n <= 16) {
+        mask |= (1 << (n - 1));
+      }
+    }
+    return mask;
+  }
+
+  function refillHand(handArr) {
+    while (deck.length > 0 && handArr.length < HAND_SIZE) {
+      handArr.push(deck.pop());
+    }
+  }
+
+  function updateCounts() {
+    $deckCount.textContent = String(deck.length);
+  }
+
+  function computeScores() {
+    // ニホンジカの枚数をカウント（R01効果判定用）
+    let shikaCount = 0;
+    for (const cell of board) {
+      if (cell.card && !cell.facedown && cell.card.name === "ニホンジカ") {
+        shikaCount++;
+      }
+    }
+    
+    // ソウシチョウがいる生活空間を特定（R03効果判定用）
+    const soushichouHabitats = new Set();
+    for (let i = 0; i < 16; i++) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown && cell.card.effect_id === "R03") {
+        // セルインデックスから生活空間を特定
+        const col = i % 4;
+        if (col === 0) soushichouHabitats.add("湿地");
+        else if (col === 1) soushichouHabitats.add("草原");
+        else if (col === 2) soushichouHabitats.add("林床");
+        else if (col === 3) soushichouHabitats.add("樹上");
+      }
+    }
+    
+    let p = 0, c = 0;
+    for (let i = 0; i < 16; i++) {
+      const cell = board[i];
+      if (!cell.card || cell.facedown) continue;
+      
+      let points = cell.card.points;
+      let penalty = 0;
+      
+      // R01: ニホンジカが2枚以上いるなら-1点
+      if (cell.card.effect_id === "R01" && shikaCount >= 2) {
+        penalty += 1;
+      }
+      
+      // R03: ソウシチョウと同じ生活空間にいる他の動物は-1点
+      if (cell.card.effect_id !== "R03" && soushichouHabitats.size > 0) {
+        const col = i % 4;
+        let habitat = "";
+        if (col === 0) habitat = "湿地";
+        else if (col === 1) habitat = "草原";
+        else if (col === 2) habitat = "林床";
+        else if (col === 3) habitat = "樹上";
+        
+        if (soushichouHabitats.has(habitat)) {
+          penalty += 1;
+        }
+      }
+      
+      points = Math.max(0, points - penalty);
+      
+      if (cell.card.owner === "P") p += points;
+      else c += points;
+    }
+    $scoreP.textContent = String(p);
+    $scoreC.textContent = String(c);
+  }
+
+  /* ========================================
+     カードデータ読み込み
+  ======================================== */
+  function loadCards() {
+    return CARD_DATA.map(c => {
+      const handImgPath = HAND_DIR + c.hand + ".png";
+      cardIdToHandImg[c.id] = handImgPath;
+      
+      return {
+        id:           c.id,
+        name:         c.name,
+        handImgPath:  handImgPath,
+        tokenImgPath: TOKEN_DIR + c.token + ".png",
+        spaces:       c.spaces || [],
+        diets:        c.diets || [],
+        allowedMask:  parseAllowedMask(c.allowed),
+        power:        c.power,
+        powerN:       powerToNum(c.power),
+        points:       c.points,
+        note:         c.note,
+        effect_id:    c.effect_id,
+        effect_type:  c.effect_type,
+        effect_text:  c.effect_text,
+      };
+    });
+  }
+
+  /* ========================================
+     情報表示エリア更新
+  ======================================== */
+  function updateInfoBox() {
+    // 残りマス数を計算
+    const remainingCells = board.filter(c => !c.facedown && !c.card).length;
+
+    if (gameOver) {
+      // DOM要素からスコアを取得して勝敗を判定
+      const p = Number($scoreP.textContent);
+      const c = Number($scoreC.textContent);
+      let resultText = "";
+      if (p > c) {
+        resultText = "あなたの勝利";
+      } else if (p < c) {
+        resultText = "CPUの勝利";
+      } else {
+        resultText = "引き分け";
+      }
+      $infoBox.innerHTML = `<span class="message">ゲーム終了（${resultText}）</span>`;
+      return;
+    }
+
+    // 効果選択モード
+    if (effectSelectMode !== null) {
+      if (effectSelectMode.type === "E02") {
+        $infoBox.innerHTML = `<div class="message-effect">
+          <div class="effect-card-name">アライグマの効果</div>
+          <div class="effect-card-text">「[樹上]にこれでない動物がいるなら、１枚選んで裏向きにする。」</div>
+          <div class="effect-instruction">裏向きにする動物を選択してください</div>
+        </div>`;
+      } else if (effectSelectMode.type === "E03") {
+        $infoBox.innerHTML = `<div class="message-effect">
+          <div class="effect-card-name">ウシガエルの効果</div>
+          <div class="effect-card-text">「[湿地]に空きがあるなら、そこから１つ選んで山札の一番上のカードを裏向きで置く。」</div>
+          <div class="effect-instruction">裏向きで置く場所を選択してください</div>
+        </div>`;
+      } else if (effectSelectMode.type === "E04") {
+        $infoBox.innerHTML = `<div class="message-effect">
+          <div class="effect-card-name">ヌートリアの効果</div>
+          <div class="effect-card-text">「[湿地]にこれでない動物がいるなら、１枚選んで裏向きにする。」</div>
+          <div class="effect-instruction">裏向きにする動物を選択してください</div>
+        </div>`;
+      } else if (effectSelectMode.type === "E05_VIEW") {
+        const e05CardName = effectSelectMode.cardName || "アオサギ";
+        $infoBox.innerHTML = `<div class="message-effect">
+          <div class="effect-card-name">${e05CardName}の効果</div>
+          <div class="effect-card-text">「プレイヤーを１人選び、その手札を見る。」</div>
+          <div class="effect-instruction">相手の手札を確認しています</div>
+        </div>`;
+      } else if (effectSelectMode.type === "E06_SELECT") {
+        $infoBox.innerHTML = `<div class="message-effect">
+          <div class="effect-card-name">ニホンザルの効果</div>
+          <div class="effect-card-text">「プレイヤー１人を選ぶ。そのプレイヤーは手札をすべて山札の下に置き、上から３枚引く。」</div>
+          <div class="effect-instruction">対象を選択してください</div>
+        </div>`;
+      }
+      return;
+    }
+
+    if (currentTurn === "C") {
+      $infoBox.innerHTML = '<span class="message-cpu">CPUのターン</span>';
+      return;
+    }
+
+    if (selectedHandIndex === null || selectedMode === null) {
+      $infoBox.innerHTML = `<span class="message"><strong>あなたのターン</strong><br>手札を選択してください（残り${remainingCells}マス）</span>`;
+      return;
+    }
+
+    const card = handP[selectedHandIndex];
+    if (!card) {
+      $infoBox.innerHTML = `<span class="message"><strong>あなたのターン</strong><br>手札を選択してください（残り${remainingCells}マス）</span>`;
+      return;
+    }
+
+    if (selectedMode === "facedown") {
+      $infoBox.innerHTML = '<span class="message"><strong>あなたのターン</strong><br>裏向きで置く場所を選択してください</span>';
+      return;
+    }
+
+    // 表向き選択時：カード情報を表示
+    const spacesStr = card.spaces.map(s => `[${s}]`).join("");
+    const dietsStr = card.diets.map(d => `[${d}]`).join("");
+
+    // 半角→全角変換
+    const toFullWidth = (str) => {
+      return String(str).replace(/[A-Za-z0-9]/g, (s) => {
+        return String.fromCharCode(s.charCodeAt(0) + 0xFEE0);
+      });
+    };
+
+    const powerFull = toFullWidth(card.power);
+    const pointsFull = toFullWidth(card.points);
+
+    let html = `<div class="card-title">${card.name}　競争力${powerFull}　${pointsFull}点</div>`;
+    html += `<div class="card-detail">生活空間：${spacesStr}　食性：${dietsStr}</div>`;
+
+    if (card.effect_type && card.effect_type !== "なし" && card.effect_text) {
+      // 置いたとき→青、置く条件→赤、特別ルール→緑
+      let effectClass = "effect-type";
+      if (card.effect_type === "置く条件") {
+        effectClass = "effect-type-condition";
+      } else if (card.effect_type === "特別ルール") {
+        effectClass = "effect-type-special";
+      }
+      html += `<div class="card-detail"><span class="${effectClass}">【${card.effect_type}】</span>${card.effect_text}</div>`;
+    } else {
+      html += `<div class="card-detail"><span class="effect-type-none">【特記事項なし】</span></div>`;
+    }
+
+    $infoBox.innerHTML = html;
+  }
+
+  /* ========================================
+     モーダル（カード拡大表示）
+  ======================================== */
+  function showModal(imgSrc) {
+    $modalImg.src = imgSrc;
+    $modalImg.style.display = "";
+    // ボードクローンがあれば削除
+    const clone = $modal.querySelector(".board-clone");
+    if (clone) clone.remove();
+    // 複数カード表示をクリア
+    const cards = $modal.querySelector(".modal-cards");
+    if (cards) cards.remove();
+    const title = $modal.querySelector(".modal-title");
+    if (title) title.remove();
+    $modal.classList.add("show");
+  }
+
+  function hideModal() {
+    hideModalExtended();
+  }
+
+  /* ========================================
+     盤面DOM構築・描画
+  ======================================== */
+  function buildCells() {
+    if (cellViews.length === 16) return;
+
+    $board.querySelectorAll(".cell").forEach(e => e.remove());
+    cellViews.length = 0;
+
+    const frag = document.createDocumentFragment();
+
+    for (let i = 0; i < 16; i++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.dataset.index = String(i);
+
+      const row = Math.floor(i / 4);
+      const col = i % 4;
+      cell.style.left   = ((OFFSET_X + col * CELL_W) * 100) + "%";
+      cell.style.top    = ((OFFSET_Y + row * CELL_H) * 100) + "%";
+      cell.style.width  = (CELL_W * 100) + "%";
+      cell.style.height = (CELL_H * 100) + "%";
+
+      const tokenWrap = document.createElement("div");
+      tokenWrap.className = "tokenWrap";
+
+      const tokenImg = document.createElement("img");
+      tokenImg.className = "token";
+      tokenImg.loading = "lazy";
+      tokenImg.onerror = () => { tokenImg.src = FALLBACK_IMG; };
+      tokenWrap.appendChild(tokenImg);
+
+      const ownerLabel = document.createElement("div");
+      ownerLabel.className = "ownerLabel";
+      tokenWrap.appendChild(ownerLabel);
+
+      const penaltyLabel = document.createElement("div");
+      penaltyLabel.className = "penaltyLabel";
+      tokenWrap.appendChild(penaltyLabel);
+
+      cell.appendChild(tokenWrap);
+      frag.appendChild(cell);
+      cellViews.push({ root: cell, tokenWrap, tokenImg, ownerLabel, penaltyLabel, lastKey: "", cardId: null });
+    }
+
+    $board.appendChild(frag);
+
+    $board.addEventListener("click", (ev) => {
+      const tokenWrap = ev.target.closest(".tokenWrap");
+      if (tokenWrap) {
+        if (selectedHandIndex !== null && selectedMode !== null) {
+          const cellEl = tokenWrap.closest(".cell");
+          if (cellEl) {
+            const i = Number(cellEl.dataset.index);
+            if (Number.isFinite(i)) onClickCell(i);
+          }
+          return;
+        }
+        const cellEl = tokenWrap.closest(".cell");
+        if (cellEl) {
+          const i = Number(cellEl.dataset.index);
+          const cellData = board[i];
+          if (cellData && cellData.card && cellData.card.id) {
+            const handImg = cardIdToHandImg[cellData.card.id];
+            if (handImg) {
+              showModal(handImg);
+              return;
+            }
+          }
+        }
+        return;
+      }
+
+      const target = ev.target.closest(".cell");
+      if (!target || !$board.contains(target)) return;
+      const i = Number(target.dataset.index);
+      if (Number.isFinite(i)) onClickCell(i);
+    });
+  }
+
+  // 配置エフェクトを発動（Promiseを返す）
+  function playPlaceEffect(cellIndex, effectType, owner) {
+    return new Promise((resolve) => {
+      const view = cellViews[cellIndex];
+      if (!view) {
+        resolve();
+        return;
+      }
+
+      // 既存のエフェクトクラスを削除
+      view.tokenWrap.classList.remove("effect-place", "effect-overwrite", "effect-overwrite-player", "effect-overwrite-cpu", "effect-facedown");
+
+      // リフローを強制してアニメーションをリセット
+      void view.tokenWrap.offsetHeight;
+
+      // エフェクトクラスを追加 & 効果音を再生
+      let duration = EFFECT_DURATION.place;
+      if (effectType === "place") {
+        view.tokenWrap.classList.add("effect-place");
+        duration = EFFECT_DURATION.place;
+        playSoundPlaceFaceup(); // 表向き配置音
+      } else if (effectType === "overwrite") {
+        view.tokenWrap.classList.add("effect-overwrite");
+        // プレイヤー/CPUで波紋の色を変える
+        if (owner === "P") {
+          view.tokenWrap.classList.add("effect-overwrite-player");
+        } else {
+          view.tokenWrap.classList.add("effect-overwrite-cpu");
+        }
+        duration = EFFECT_DURATION.overwrite;
+        playSoundOverwritePart1(); // 上書き音（前半：ガサガサ）
+        // 後半の爆発音（衝撃波のタイミングで）
+        setTimeout(() => {
+          playSoundOverwritePart2();
+        }, 700); // スライドイン完了後
+      } else if (effectType === "facedown") {
+        view.tokenWrap.classList.add("effect-facedown");
+        duration = EFFECT_DURATION.facedown;
+        playSoundPlaceFacedown(); // 裏向き配置音
+      }
+
+      // アニメーション終了後にクラスを削除してresolve
+      setTimeout(() => {
+        view.tokenWrap.classList.remove("effect-place", "effect-overwrite", "effect-overwrite-player", "effect-overwrite-cpu", "effect-facedown");
+        resolve();
+      }, duration);
+    });
+  }
+
+  function renderBoard() {
+    for (let i = 0; i < 16; i++) {
+      const cell = board[i];
+      const view = cellViews[i];
+
+      const key = cell.facedown ? "FD" :
+                  cell.card ? `C:${cell.card.id}:${cell.card.owner}` : "E";
+      if (view.lastKey === key) continue;
+      view.lastKey = key;
+
+      view.tokenWrap.classList.remove("owner-P", "owner-C", "owner-none");
+      view.cardId = null;
+      view.penaltyLabel.style.display = "none";
+      view.penaltyLabel.textContent = "";
+
+      if (cell.facedown) {
+        view.tokenWrap.style.display = "block";
+        view.tokenWrap.classList.add("owner-none");
+        if (!view.tokenImg.src.endsWith("token00.png")) view.tokenImg.src = TOKEN_BACK;
+        view.ownerLabel.style.display = "none";
+        continue;
+      }
+
+      if (!cell.card) {
+        view.tokenWrap.style.display = "none";
+        view.ownerLabel.style.display = "none";
+        continue;
+      }
+
+      view.tokenWrap.style.display = "block";
+      view.tokenImg.src = cell.card.tokenImgPath;
+      view.cardId = cell.card.id;
+      
+      const ownerClass = cell.card.owner === "P" ? "owner-P" : "owner-C";
+      view.tokenWrap.classList.add(ownerClass);
+      
+      view.ownerLabel.textContent = cell.card.owner === "P" ? "プレイヤー" : "CPU";
+      view.ownerLabel.className = "ownerLabel " + ownerClass;
+      view.ownerLabel.style.display = "block";
+    }
+
+    updateCellDisabled();
+  }
+
+  function updatePenaltyLabels() {
+    // ニホンジカの枚数をカウント
+    let shikaCount = 0;
+    for (const cell of board) {
+      if (cell.card && !cell.facedown && cell.card.name === "ニホンジカ") {
+        shikaCount++;
+      }
+    }
+
+    // ソウシチョウがいる生活空間を特定
+    const soushichouHabitats = new Set();
+    for (let i = 0; i < 16; i++) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown && cell.card.effect_id === "R03") {
+        const col = i % 4;
+        if (col === 0) soushichouHabitats.add("湿地");
+        else if (col === 1) soushichouHabitats.add("草原");
+        else if (col === 2) soushichouHabitats.add("林床");
+        else if (col === 3) soushichouHabitats.add("樹上");
+      }
+    }
+
+    // 新しくペナルティが発生したかどうかを追跡
+    let newPenaltyOccurred = false;
+
+    // 各セルのペナルティ表示を更新
+    for (let i = 0; i < 16; i++) {
+      const view = cellViews[i];
+      const cell = board[i];
+
+      // 以前のペナルティ状態を記録
+      const wasPenalty = view.penaltyLabel.style.display === "flex";
+
+      if (!cell.card || cell.facedown) {
+        view.penaltyLabel.style.display = "none";
+        continue;
+      }
+
+      let penalty = 0;
+
+      // R01: ニホンジカが2枚以上いる場合、-1点
+      if (cell.card.effect_id === "R01" && shikaCount >= 2) {
+        penalty += 1;
+      }
+
+      // R03: ソウシチョウと同じ生活空間にいる他の動物は-1点
+      if (cell.card.effect_id !== "R03" && soushichouHabitats.size > 0) {
+        const col = i % 4;
+        let habitat = "";
+        if (col === 0) habitat = "湿地";
+        else if (col === 1) habitat = "草原";
+        else if (col === 2) habitat = "林床";
+        else if (col === 3) habitat = "樹上";
+        
+        if (soushichouHabitats.has(habitat)) {
+          penalty += 1;
+        }
+      }
+
+      // ペナルティ表示
+      if (penalty > 0) {
+        const penaltyText = penalty === 1 ? "－１点" : "－２点";
+        view.penaltyLabel.textContent = penaltyText;
+        view.penaltyLabel.style.display = "flex";
+        
+        // 新しくペナルティが発生した場合
+        if (!wasPenalty) {
+          newPenaltyOccurred = true;
+        }
+      } else {
+        view.penaltyLabel.style.display = "none";
+      }
+    }
+
+    // 新しくペナルティが発生した場合、効果音を鳴らす
+    if (newPenaltyOccurred) {
+      playSoundEffect();
+    }
+  }
+
+  function updateCellDisabled() {
+    for (let i = 0; i < 16; i++) {
+      const view = cellViews[i];
+      const cell = board[i];
+
+      // 両方のクラスをリセット
+      view.root.classList.remove("disabled", "condition-not-met", "effect-selectable");
+
+      // 効果選択モード（E02, E03, E04など）- EFFECT_PENDINGは除外
+      if (effectSelectMode !== null && effectSelectMode.type !== "EFFECT_PENDING") {
+        // validCellsがある場合のみ選択可能マスを表示
+        if (effectSelectMode.validCells && effectSelectMode.validCells.includes(i)) {
+          view.root.classList.add("effect-selectable");
+        } else {
+          view.root.classList.add("disabled");
+        }
+        continue;
+      }
+
+      if (selectedHandIndex === null || currentTurn !== "P" || gameOver) {
+        continue;
+      }
+
+      const card = handP[selectedHandIndex];
+      if (!card) {
+        continue;
+      }
+
+      if (selectedMode === "faceup") {
+        // 表向き配置の場合
+        const canPlaceBasic = canPlaceAt(card, cell.no) && canPlaceFaceUp(card, cell);
+        const conditionMet = checkEffectCondition(card);
+
+        if (!canPlaceBasic) {
+          // マスとして置けない（生活空間/食性が合わない、競争力不足など）
+          view.root.classList.add("disabled");
+        } else if (!conditionMet) {
+          // マスとしては置けるが、効果条件を満たさない
+          view.root.classList.add("condition-not-met");
+        }
+        // 両方OKの場合はクラスなし（クリック可能）
+      } else if (selectedMode === "facedown") {
+        // 裏向き配置の場合（条件チェック不要）
+        if (!canPlaceFaceDown(cell)) {
+          view.root.classList.add("disabled");
+        }
+      }
+    }
+  }
+
+  function renderHand() {
+    $handP.textContent = "";
+    const frag = document.createDocumentFragment();
+
+    handP.forEach((card, i) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "handCard";
+      const isSelectedFacedown = (selectedHandIndex === i && selectedMode === "facedown");
+      if (selectedHandIndex === i) {
+        wrapper.classList.add(selectedMode === "faceup" ? "selected-faceup" : "selected-facedown");
+      }
+
+      const img = document.createElement("img");
+      img.src = isSelectedFacedown ? CARD_BACK : card.handImgPath;
+      img.alt = card.name;
+      img.loading = "lazy";
+      img.onerror = () => { img.src = FALLBACK_IMG; };
+      img.addEventListener("click", () => showModal(card.handImgPath));
+
+      const buttons = document.createElement("div");
+      buttons.className = "buttons";
+
+      const btnFaceUp = document.createElement("button");
+      btnFaceUp.className = "btn-faceup";
+      btnFaceUp.textContent = "表向きで置く";
+      if (selectedHandIndex === i && selectedMode === "faceup") {
+        btnFaceUp.classList.add("active");
+      }
+      // 効果選択モード中は無効化
+      if (effectSelectMode !== null) {
+        btnFaceUp.disabled = true;
+      }
+      btnFaceUp.addEventListener("click", () => selectCard(i, "faceup"));
+
+      const btnFaceDown = document.createElement("button");
+      btnFaceDown.className = "btn-facedown";
+      btnFaceDown.textContent = "裏向きで置く";
+      if (isSelectedFacedown) {
+        btnFaceDown.classList.add("active");
+      }
+      // 効果選択モード中は無効化
+      if (effectSelectMode !== null) {
+        btnFaceDown.disabled = true;
+      }
+      btnFaceDown.addEventListener("click", () => selectCard(i, "facedown"));
+
+      buttons.appendChild(btnFaceUp);
+      buttons.appendChild(btnFaceDown);
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(buttons);
+      frag.appendChild(wrapper);
+    });
+
+    $handP.appendChild(frag);
+    updateCounts();
+    updateCancelButton();
+    updateInfoBox();
+  }
+
+  function selectCard(index, mode) {
+    if (gameOver || currentTurn !== "P") return;
+    // 効果選択モード中は手札選択不可
+    if (effectSelectMode !== null) return;
+
+    if (selectedHandIndex === index && selectedMode === mode) {
+      selectedHandIndex = null;
+      selectedMode = null;
+    } else {
+      selectedHandIndex = index;
+      selectedMode = mode;
+    }
+
+    renderHand();
+    updateCellDisabled();
+  }
+
+  function cancelSelection() {
+    // 効果選択モード中はキャンセル不可
+    if (effectSelectMode !== null) return;
+    
+    selectedHandIndex = null;
+    selectedMode = null;
+    renderHand();
+    updateCellDisabled();
+  }
+
+  function updateCancelButton() {
+    if (selectedHandIndex !== null && selectedMode !== null) {
+      $btnCancel.style.display = "inline-block";
+    } else {
+      $btnCancel.style.display = "none";
+    }
+  }
+
+  function fitBoard() {
+    const main = document.querySelector(".main").getBoundingClientRect();
+    const isWide = window.matchMedia("(min-width: 900px)").matches;
+    const rightW = isWide ? 480 : 0;
+    const maxW = isWide ? (main.width - rightW - 10) : main.width;
+    const maxH = main.height;
+    const size = Math.floor(Math.min(maxW, maxH));
+    $board.style.width = size + "px";
+    $board.style.height = size + "px";
+  }
+
+  /* ========================================
+     配置判定
+  ======================================== */
+  function canPlaceAt(card, cellNo) {
+    return (card.allowedMask & (1 << (cellNo - 1))) !== 0;
+  }
+
+  function canPlaceFaceUp(card, cell) {
+    // R02: アメリカザリガニは裏向きカードの上にも置ける
+    if (cell.facedown && card.effect_id === "R02") {
+      return true;
+    }
+    if (cell.facedown) return false;
+    if (!cell.card) return true;
+    return card.powerN > cell.card.powerN;
+  }
+
+  function canPlaceFaceDown(cell) {
+    return !cell.facedown && !cell.card;
+  }
+
+  /* ========================================
+     効果条件チェック（C01〜C13）
+  ======================================== */
+  // 生活空間ごとのセルインデックス（0-based）
+  const HABITAT_CELLS = {
+    "湿地": [0, 4, 8, 12],
+    "草原": [1, 5, 9, 13],
+    "林床": [2, 6, 10, 14],
+    "樹上": [3, 7, 11, 15]
+  };
+
+  // セルインデックスから生活空間名を取得
+  function getHabitatName(cellIndex) {
+    const col = cellIndex % 4;
+    const habitats = ["湿地", "草原", "林床", "樹上"];
+    return habitats[col];
+  }
+
+  // 盤面上の表向きカードの「種類数」をカウント（同名カードは1種類としてカウント）
+  function countSpeciesInCells(cellIndices) {
+    const names = new Set();
+    for (const i of cellIndices) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown) {
+        names.add(cell.card.name);
+      }
+    }
+    return names.size;
+  }
+
+  // 盤面上の表向きカードの「枚数」をカウント（同名カードも別々にカウント）
+  function countCardsInCells(cellIndices) {
+    let count = 0;
+    for (const i of cellIndices) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  // 全盤面の種類数
+  function countTotalSpecies() {
+    return countSpeciesInCells([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
+  }
+
+  // 全盤面の枚数
+  function countTotalCards() {
+    return countCardsInCells([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
+  }
+
+  // 特定の生活空間に特定の食性を持つ動物がいるか
+  function hasAnimalWithDietInHabitat(habitat, diet) {
+    const cells = HABITAT_CELLS[habitat] || [];
+    for (const i of cells) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown && cell.card.diets.includes(diet)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 無尾目（カエル目）の動物がいるか
+  function hasAnura() {
+    for (let i = 0; i < 16; i++) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown && cell.card.note === "無尾目") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 効果条件をチェック（表向きで置けるかの追加条件）
+  // 戻り値: true=条件OK（or 条件なし）, false=条件未達成
+  function checkEffectCondition(card) {
+    const effectId = card.effect_id;
+    
+    // 効果なし or 置く条件以外は常にOK
+    if (!effectId || effectId === "N00" || card.effect_type !== "置く条件") {
+      return true;
+    }
+
+    switch (effectId) {
+      case "C01": // アオバト: [樹上]に２種以上の動物がいる
+        return countSpeciesInCells(HABITAT_CELLS["樹上"]) >= 2;
+
+      case "C02": // アカギツネ: [草原]に１枚以上の動物がいる
+        return countCardsInCells(HABITAT_CELLS["草原"]) >= 1;
+
+      case "C03": // アカハライモリ: 全体で３種以上の動物がいる
+        return countTotalSpecies() >= 3;
+
+      case "C04": // クロゲンゴロウ: [湿地]に２種以上の動物がいる
+        return countSpeciesInCells(HABITAT_CELLS["湿地"]) >= 2;
+
+      case "C05": // ツキノワグマ: [林床]と[樹上]に計３枚以上の動物(同種も可)がいる
+        return countCardsInCells([...HABITAT_CELLS["林床"], ...HABITAT_CELLS["樹上"]]) >= 3;
+
+      case "C06": // ニホンイシガメ: 全体で４種以上の動物がいる
+        return countTotalSpecies() >= 4;
+
+      case "C07": // ニホンヒキガエル: 全体で５枚以上の動物(同種も可)がいないと出せない
+        return countTotalCards() >= 5;
+
+      case "C08": // ニホンマムシ: どこかに無尾目(カエル目)の動物がいる
+        return hasAnura();
+
+      case "C09": // ニホンリス: [林床]と[樹上]に計２種以上の動物がいる
+        return countSpeciesInCells([...HABITAT_CELLS["林床"], ...HABITAT_CELLS["樹上"]]) >= 2;
+
+      case "C10": // ムササビ: [林床]に[葉]を食べる動物がいる
+        return hasAnimalWithDietInHabitat("林床", "葉");
+
+      case "C11": // モリアオガエル: [湿地]に１種以上の動物がいる
+        return countSpeciesInCells(HABITAT_CELLS["湿地"]) >= 1;
+
+      case "C12": // ヤマアカガエル: [湿地]と[林床]に計３種以上の動物がいる
+        return countSpeciesInCells([...HABITAT_CELLS["湿地"], ...HABITAT_CELLS["林床"]]) >= 3;
+
+      case "C13": // ヤマトサンショウウオ: [湿地]と[林床]に計４種以上の動物がいる
+        return countSpeciesInCells([...HABITAT_CELLS["湿地"], ...HABITAT_CELLS["林床"]]) >= 4;
+
+      default:
+        return true;
+    }
+  }
+
+  /* ========================================
+     「置いたとき」効果処理（E01〜E06）
+  ======================================== */
+  // 「置いたとき」効果の有無をチェック（実行はしない）
+  function hasOnPlaceEffect(card) {
+    const effectId = card.effect_id;
+    
+    if (!effectId || card.effect_type !== "置いたとき") {
+      return null; // 効果なし
+    }
+
+    // 効果IDを返す
+    switch (effectId) {
+      case "E01":
+      case "E02":
+      case "E03":
+      case "E04":
+      case "E05":
+      case "E06":
+        return effectId;
+      default:
+        return null; // 未実装の効果
+    }
+  }
+
+  // 「置いたとき」効果を準備（配置エフェクト完了後に呼ばれる）
+  function prepareOnPlaceEffect(card, owner) {
+    const effectId = card.effect_id;
+    
+    switch (effectId) {
+      case "E01":
+        applyE01_Akamimigame(card.name, owner);
+        break;
+      case "E02":
+        applyE02_Araiguma(owner, card.name);
+        break;
+      case "E03":
+        applyE03_Ushigaeru(owner, card.name);
+        break;
+      case "E04":
+        applyE04_Nutria(owner, card.name);
+        break;
+      case "E05":
+        applyE05_ViewHand(owner, card.name);
+        break;
+      case "E06":
+        applyE06_Nihonzaru(owner, card.name);
+        break;
+    }
+  }
+
+  // E01: アカミミガメ効果 - ニホンイシガメを裏向きにする（準備）
+  function applyE01_Akamimigame(cardName, owner) {
+    // ニホンイシガメを探す
+    const targets = [];
+    for (let i = 0; i < 16; i++) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown && cell.card.name === "ニホンイシガメ") {
+        targets.push(i);
+      }
+    }
+    
+    if (targets.length === 0) {
+      // 対象なし、効果完了
+      effectSelectMode = null;
+      return;
+    }
+    
+    // 効果発動音
+    playSoundEffect();
+    log(`${cardName} の効果発生`, "effect");
+    
+    // 効果実行準備（配置エフェクト完了後に実行される）
+    effectSelectMode = { 
+      type: "E01_EXEC", 
+      targets: targets,
+      cardName: cardName,
+      owner: owner 
+    };
+  }
+
+  // E02: アライグマ効果 - 樹上の動物を1枚選んで裏向きにする（準備）
+  function applyE02_Araiguma(owner, cardName) {
+    // 樹上にいる「アライグマ以外」の表向き動物を探す
+    const targets = [];
+    for (const i of HABITAT_CELLS["樹上"]) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown && cell.card.name !== "アライグマ") {
+        targets.push(i);
+      }
+    }
+
+    if (targets.length === 0) {
+      // 対象なし、効果完了
+      effectSelectMode = null;
+      return;
+    }
+
+    // 効果発動音
+    playSoundEffect();
+    
+    log(`${cardName} の効果発生`, "effect");
+
+    // 効果実行準備（配置エフェクト完了後に実行される）
+    if (targets.length === 1) {
+      // 対象が1枚だけ：自動で裏向き
+      effectSelectMode = { 
+        type: "E02_AUTO", 
+        target: targets[0],
+        cardName: cardName,
+        owner: owner 
+      };
+    } else if (owner === "C") {
+      // CPU：ランダムで選ぶ
+      const pick = targets[Math.floor(Math.random() * targets.length)];
+      effectSelectMode = { 
+        type: "E02_AUTO", 
+        target: pick,
+        cardName: cardName,
+        owner: owner 
+      };
+    } else {
+      // プレイヤー：選択モード
+      effectSelectMode = { 
+        type: "E02", 
+        validCells: targets, 
+        cardName: cardName, 
+        owner: owner 
+      };
+      log(`裏向きにする [樹上] の動物を選んでください`, "effect");
+    }
+  }
+
+  // E04: ヌートリア効果 - 湿地の動物を1枚選んで裏向きにする（準備）
+  function applyE04_Nutria(owner, cardName) {
+    // 湿地にいる「ヌートリア以外」の表向き動物を探す
+    const targets = [];
+    for (const i of HABITAT_CELLS["湿地"]) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown && cell.card.name !== "ヌートリア") {
+        targets.push(i);
+      }
+    }
+
+    if (targets.length === 0) {
+      // 対象なし、効果完了
+      effectSelectMode = null;
+      return;
+    }
+
+    // 効果発動音
+    playSoundEffect();
+    
+    log(`${cardName} の効果発生`, "effect");
+
+    // 効果実行準備（配置エフェクト完了後に実行される）
+    if (targets.length === 1) {
+      // 対象が1枚だけ：自動で裏向き
+      effectSelectMode = { 
+        type: "E04_AUTO", 
+        target: targets[0],
+        cardName: cardName,
+        owner: owner 
+      };
+    } else if (owner === "C") {
+      // CPU：ランダムで選ぶ
+      const pick = targets[Math.floor(Math.random() * targets.length)];
+      effectSelectMode = { 
+        type: "E04_AUTO", 
+        target: pick,
+        cardName: cardName,
+        owner: owner 
+      };
+    } else {
+      // プレイヤー：選択モード
+      effectSelectMode = { 
+        type: "E04", 
+        validCells: targets, 
+        cardName: cardName, 
+        owner: owner 
+      };
+      log(`裏向きにする [湿地] の動物を選んでください`, "effect");
+    }
+  }
+
+  // 共通: 指定セルのカードを裏向きにする（エフェクトあり、ターン終了処理付き）
+  function flipCardFacedownWithEffect(cellIndex, owner) {
+    const cell = board[cellIndex];
+    if (!cell.card) {
+      effectSelectMode = null;
+      if (owner === "P") {
+        setTimeout(() => endPlayerTurn(), 100);
+      }
+      return;
+    }
+    
+    const targetName = cell.card.name;
+    cell.facedown = true;
+    cell.card = null;
+    log(`${targetName} が裏向きになった`, "effect");
+
+    // データ変更後、画像を更新してからエフェクト
+    renderBoard();
+    playFlipFacedownEffect(cellIndex).then(() => {
+      effectSelectMode = null;
+      if (owner === "P") {
+        endPlayerTurn();
+      }
+    });
+  }
+
+  // カード効果で裏向きになるときのエフェクト（Promiseを返す）
+  function playFlipFacedownEffect(cellIndex) {
+    return new Promise((resolve) => {
+      const view = cellViews[cellIndex];
+      if (!view) {
+        resolve();
+        return;
+      }
+
+      view.tokenWrap.classList.remove("effect-flip-facedown");
+      void view.tokenWrap.offsetHeight;
+      view.tokenWrap.classList.add("effect-flip-facedown");
+      
+      // 裏向き音を再生
+      playSoundPlaceFacedown();
+
+      setTimeout(() => {
+        view.tokenWrap.classList.remove("effect-flip-facedown");
+        resolve();
+      }, EFFECT_DURATION.flipFacedown);
+    });
+  }
+
+  // E05: アオサギ・コサギ効果 - 相手の手札を見る
+  function applyE05_ViewHand(owner, cardName) {
+    if (owner === "P") {
+      // プレイヤーが置いた場合：CPUの手札を表示（配置エフェクト完了後に呼び出される）
+      if (handC.length === 0) {
+        // 対象なし、効果完了
+        effectSelectMode = null;
+        return;
+      }
+      
+      // 効果発動音
+      playSoundEffect();
+      
+      log(`${cardName} の効果発生`, "effect");
+      log(`あなたはCPUの手札を見た`, "effect");
+      
+      // E05待機モードに入る（配置エフェクト完了後にモーダル表示される）
+      const handImages = handC.map(c => c.handImgPath).filter(path => path); // undefinedを除外
+      effectSelectMode = { 
+        type: "E05_VIEW", 
+        cardName: cardName, 
+        owner: owner,
+        handToShow: handImages
+      };
+    } else {
+      // CPUが置いた場合：ログだけ記録（実際には何も表示しない）
+      // 効果発動音
+      playSoundEffect();
+      
+      log(`${cardName} の効果発生`, "effect");
+      log(`CPUはあなたの手札を見た`, "effect");
+      // 効果完了
+      effectSelectMode = null;
+    }
+  }
+
+  // 複数カードをモーダル表示
+  function showModalMultiple(imgPaths, title) {
+    // 既存の画像を非表示
+    $modalImg.style.display = "none";
+    
+    // 既存のカード表示を削除
+    const existingCards = $modal.querySelector(".modal-cards");
+    if (existingCards) existingCards.remove();
+    const existingTitle = $modal.querySelector(".modal-title");
+    if (existingTitle) existingTitle.remove();
+    const clone = $modal.querySelector(".board-clone");
+    if (clone) clone.remove();
+
+    // タイトル作成
+    const titleEl = document.createElement("div");
+    titleEl.className = "modal-title";
+    titleEl.textContent = title;
+
+    // カードコンテナ作成
+    const container = document.createElement("div");
+    container.className = "modal-cards";
+    
+    for (const path of imgPaths) {
+      const img = document.createElement("img");
+      img.src = path;
+      img.alt = "カード";
+      img.onerror = () => { img.src = FALLBACK_IMG; };
+      container.appendChild(img);
+    }
+
+    // modal-contentに追加
+    const modalContent = $modal.querySelector(".modal-content");
+    modalContent.appendChild(titleEl);
+    modalContent.appendChild(container);
+    
+    // スクロール位置をリセット
+    modalContent.scrollTop = 0;
+
+    $modal.classList.add("show");
+  }
+
+  // E06: ニホンザル効果 - プレイヤー1人の手札を山札の下に置き、3枚引く
+  function applyE06_Nihonzaru(owner, cardName) {
+    // 効果発動音
+    playSoundEffect();
+    
+    log(`${cardName} の効果発生`, "effect");
+    
+    if (owner === "P") {
+      // プレイヤーが置いた場合：ダイアログ表示準備（配置エフェクト完了後に表示）
+      effectSelectMode = { type: "E06_SELECT", cardName: cardName, owner: owner };
+    } else {
+      // CPUが置いた場合：確定でプレイヤーの手札を対象にする（配置エフェクト完了後に実行）
+      effectSelectMode = { type: "E06_CPU_EXEC", target: "P", cardName: cardName, owner: owner };
+    }
+  }
+
+  // E06: プレイヤー選択ダイアログを表示
+  function showSelectPlayerDialog() {
+    $selectPlayerDialog.classList.remove("hidden");
+  }
+
+  // E06: プレイヤー選択ダイアログを閉じる
+  function hideSelectPlayerDialog() {
+    $selectPlayerDialog.classList.add("hidden");
+  }
+
+  // E06: 効果実行（対象の手札を山札の下に置き、3枚引く）
+  function executeE06Effect(target) {
+    if (target === "P") {
+      // プレイヤーの手札をシャッフルして山札の下（先頭）に移動
+      const shuffledHand = shuffle([...handP]);
+      handP.length = 0; // 手札をクリア
+      
+      // 山札から3枚引く（手札を戻す前に）
+      const newHand = [];
+      for (let i = 0; i < 3 && deck.length > 0; i++) {
+        newHand.push(deck.pop());
+      }
+      
+      // 古い手札を山札の先頭（下）にランダムな順番で追加
+      for (let i = shuffledHand.length - 1; i >= 0; i--) {
+        deck.unshift(shuffledHand[i]);
+      }
+      
+      // 新しい手札をセット
+      handP.push(...newHand);
+      
+      log(`あなたの手札が入れ替わった`, "effect");
+    } else {
+      // CPUの手札をシャッフルして山札の下（先頭）に移動
+      const shuffledHand = shuffle([...handC]);
+      handC.length = 0; // 手札をクリア
+      
+      // 山札から3枚引く（手札を戻す前に）
+      const newHand = [];
+      for (let i = 0; i < 3 && deck.length > 0; i++) {
+        newHand.push(deck.pop());
+      }
+      
+      // 古い手札を山札の先頭（下）にランダムな順番で追加
+      for (let i = shuffledHand.length - 1; i >= 0; i--) {
+        deck.unshift(shuffledHand[i]);
+      }
+      
+      // 新しい手札をセット
+      handC.push(...newHand);
+      
+      log(`CPUの手札が入れ替わった`, "effect");
+    }
+    updateCounts();
+    renderHand(); // 手札表示を更新
+  }
+
+  // E03: ウシガエル効果 - 湿地の空きマスに山札から裏向きで配置（準備）
+  function applyE03_Ushigaeru(owner, cardName) {
+    // 山札がなければ効果なし
+    if (deck.length === 0) {
+      effectSelectMode = null;
+      return;
+    }
+
+    // 湿地の空きマスを探す（セル0, 4, 8, 12）
+    const wetlandEmpty = [];
+    for (const i of HABITAT_CELLS["湿地"]) {
+      const cell = board[i];
+      if (!cell.card && !cell.facedown) {
+        wetlandEmpty.push(i);
+      }
+    }
+
+    if (wetlandEmpty.length === 0) {
+      effectSelectMode = null;
+      return;
+    }
+
+    // 効果発動音
+    playSoundEffect();
+    
+    log(`${cardName} の効果発生`, "effect");
+
+    // 効果実行準備（配置エフェクト完了後に実行される）
+    if (wetlandEmpty.length === 1) {
+      // 空きマスが1つだけ：自動配置
+      effectSelectMode = { 
+        type: "E03_AUTO", 
+        target: wetlandEmpty[0],
+        cardName: cardName,
+        owner: owner 
+      };
+    } else if (owner === "C") {
+      // CPU：ランダムで選ぶ
+      const pick = wetlandEmpty[Math.floor(Math.random() * wetlandEmpty.length)];
+      effectSelectMode = { 
+        type: "E03_AUTO", 
+        target: pick,
+        cardName: cardName,
+        owner: owner 
+      };
+    } else {
+      // プレイヤー：選択モード
+      effectSelectMode = { 
+        type: "E03", 
+        validCells: wetlandEmpty, 
+        cardName: cardName, 
+        owner: owner 
+      };
+      log(`山札から裏向きで置く [湿地] のマスを選んでください`, "effect");
+    }
+  }
+
+  // E03: 指定マスに山札から裏向きで配置（エフェクトあり）
+  function placeE03FacedownWithEffect(cellIndex, owner) {
+    if (deck.length === 0) {
+      effectSelectMode = null;
+      if (owner === "P") {
+        setTimeout(() => endPlayerTurn(), 100);
+      }
+      return;
+    }
+
+    deck.pop();
+    board[cellIndex].facedown = true;
+    board[cellIndex].card = null;
+    updateCounts();
+
+    // データ変更後、画像を更新してからエフェクト
+    renderBoard();
+    playPlaceEffect(cellIndex, "facedown", owner).then(() => {
+      effectSelectMode = null;
+      if (owner === "P") {
+        endPlayerTurn();
+      }
+    });
+  }
+
+  /* ========================================
+     プレイヤー操作
+  ======================================== */
+  function onClickCell(i) {
+    if (gameOver) return;
+
+    // 効果選択モード（E02, E03, E04など）
+    if (effectSelectMode !== null) {
+      if (effectSelectMode.type === "E02") {
+        if (!effectSelectMode.validCells.includes(i)) {
+          return;
+        }
+        // 選択した動物を裏向きにする
+        const owner = effectSelectMode.owner || "P";
+        // 選択モードを即座にクリア
+        effectSelectMode = null;
+        renderBoard(); // 「選択可」を消す
+        flipCardFacedownWithEffect(i, owner);
+        return;
+      }
+      if (effectSelectMode.type === "E03") {
+        if (!effectSelectMode.validCells.includes(i)) {
+          return;
+        }
+        // 選択したマスに裏向き配置
+        const owner = effectSelectMode.owner || "P";
+        // 選択モードを即座にクリア
+        effectSelectMode = null;
+        renderBoard(); // 「選択可」を消す
+        placeE03FacedownWithEffect(i, owner);
+        return;
+      }
+      if (effectSelectMode.type === "E04") {
+        if (!effectSelectMode.validCells.includes(i)) {
+          return;
+        }
+        // 選択した動物を裏向きにする
+        const owner = effectSelectMode.owner || "P";
+        // 選択モードを即座にクリア
+        effectSelectMode = null;
+        renderBoard(); // 「選択可」を消す
+        flipCardFacedownWithEffect(i, owner);
+        return;
+      }
+      return;
+    }
+
+    if (currentTurn !== "P") return;
+
+    if (selectedHandIndex === null || selectedMode === null) {
+      return;
+    }
+
+    const cell = board[i];
+    const card = handP[selectedHandIndex];
+
+    if (selectedMode === "facedown") {
+      if (!canPlaceFaceDown(cell)) {
+        return;
+      }
+
+      const habitat = getHabitatName(i);
+      handP.splice(selectedHandIndex, 1);
+      selectedHandIndex = null;
+      selectedMode = null;
+      refillHand(handP);
+
+      cell.facedown = true;
+      cell.card = null;
+
+      log(`あなた： [${habitat}] に裏向きで置いた`, "player");
+      renderBoard();
+      playPlaceEffect(i, "facedown", "P").then(() => {
+        endPlayerTurn();
+      });
+      return;
+    }
+
+    if (!canPlaceAt(card, cell.no)) {
+      return;
+    }
+    if (!canPlaceFaceUp(card, cell)) {
+      return;
+    }
+    if (!checkEffectCondition(card)) {
+      return;
+    }
+
+    const prev = cell.card;
+    const habitat = getHabitatName(i);
+    cell.facedown = false;
+    cell.card = { ...card, owner: "P" };
+
+    handP.splice(selectedHandIndex, 1);
+    selectedHandIndex = null;
+    selectedMode = null;
+    refillHand(handP);
+
+    if (prev) {
+      log(`あなた： ${card.name} が ${prev.name} から [${habitat}] のニッチを奪った`, "player");
+    } else {
+      log(`あなた： ${card.name} が [${habitat}] のニッチを埋めた`, "player");
+    }
+
+    // 「置いたとき」効果の有無をチェック
+    const effectId = hasOnPlaceEffect(card);
+
+    // エフェクトを再生
+    renderBoard();
+    playPlaceEffect(i, prev ? "overwrite" : "place", "P").then(() => {
+      // エフェクト完了後にペナルティラベルを更新
+      updatePenaltyLabels();
+      
+      // エフェクト完了後に効果処理を開始
+      if (effectId) {
+        // 効果準備（ここでeffectSelectModeがセットされる）
+        prepareOnPlaceEffect(card, "P");
+        
+        const mode = effectSelectMode;
+        
+        if (!mode) {
+          // 対象なし等で効果が発動しなかった
+          endPlayerTurn();
+          return;
+        }
+        
+        // E01: アカミミガメ - ニホンイシガメを裏向き
+        if (mode.type === "E01_EXEC") {
+          // effectSelectModeをクリア（renderBoardで画面が暗くならないように）
+          effectSelectMode = null;
+          
+          for (const targetIndex of mode.targets) {
+            const cell = board[targetIndex];
+            cell.facedown = true;
+            cell.card = null;
+            log(`ニホンイシガメ が裏向きになった`, "effect");
+          }
+          renderBoard();
+          
+          // 効果発動音が終わってから裏向きエフェクトを再生（300ms遅延）
+          if (mode.targets.length > 0) {
+            effectDelayTimerId = setTimeout(() => {
+              effectDelayTimerId = null;
+              playFlipFacedownEffect(mode.targets[0]).then(() => {
+                endPlayerTurn();
+              });
+            }, 300);
+          } else {
+            endPlayerTurn();
+          }
+          return;
+        }
+        
+        // E02: アライグマ - 自動実行
+        if (mode.type === "E02_AUTO") {
+          effectSelectMode = null; // 先にクリア
+          renderBoard(); // ボード更新
+          // 効果発動音が終わってから裏向き処理を開始（300ms遅延）
+          effectDelayTimerId = setTimeout(() => {
+            effectDelayTimerId = null;
+            flipCardFacedownWithEffect(mode.target, mode.owner);
+          }, 300);
+          return;
+        }
+        
+        // E02: アライグマ - 選択モード
+        if (mode.type === "E02") {
+          // 一時的にクリア（renderBoardで画面が暗くならないように）
+          effectSelectMode = null;
+          renderBoard();
+          renderHand();
+          updateInfoBox();
+          // UI更新後に選択モードを再セット
+          effectSelectMode = mode;
+          renderBoard(); // 選択可能マスを表示
+          renderHand();  // 手札を無効化
+          return;
+        }
+        
+        // E03: ウシガエル - 自動実行
+        if (mode.type === "E03_AUTO") {
+          effectSelectMode = null; // 先にクリア
+          renderBoard(); // ボード更新
+          // 効果発動音が終わってから裏向き処理を開始（300ms遅延）
+          effectDelayTimerId = setTimeout(() => {
+            effectDelayTimerId = null;
+            placeE03FacedownWithEffect(mode.target, mode.owner);
+          }, 300);
+          return;
+        }
+        
+        // E03: ウシガエル - 選択モード
+        if (mode.type === "E03") {
+          // 一時的にクリア（renderBoardで画面が暗くならないように）
+          effectSelectMode = null;
+          renderBoard();
+          renderHand();
+          updateInfoBox();
+          // UI更新後に選択モードを再セット
+          effectSelectMode = mode;
+          renderBoard(); // 選択可能マスを表示
+          renderHand();  // 手札を無効化
+          return;
+        }
+        
+        // E04: ヌートリア - 自動実行
+        if (mode.type === "E04_AUTO") {
+          effectSelectMode = null; // 先にクリア
+          renderBoard(); // ボード更新
+          // 効果発動音が終わってから裏向き処理を開始（300ms遅延）
+          effectDelayTimerId = setTimeout(() => {
+            effectDelayTimerId = null;
+            flipCardFacedownWithEffect(mode.target, mode.owner);
+          }, 300);
+          return;
+        }
+        
+        // E04: ヌートリア - 選択モード
+        if (mode.type === "E04") {
+          // 一時的にクリア（renderBoardで画面が暗くならないように）
+          effectSelectMode = null;
+          renderBoard();
+          renderHand();
+          updateInfoBox();
+          // UI更新後に選択モードを再セット
+          effectSelectMode = mode;
+          renderBoard(); // 選択可能マスを表示
+          renderHand();  // 手札を無効化
+          return;
+        }
+        
+        // E05: アオサギ・コサギ - モーダル表示
+        if (mode.type === "E05_VIEW") {
+          // 一時的にクリア（renderBoardで画面が暗くならないように）
+          effectSelectMode = null;
+          renderBoard();
+          renderHand();
+          updateInfoBox();
+          // UI更新後にモードを再セットしてモーダル表示
+          effectSelectMode = mode;
+          showModalMultiple(mode.handToShow, "相手の手札");
+          return;
+        }
+        
+        // E06: ニホンザル - ダイアログ表示
+        if (mode.type === "E06_SELECT") {
+          // 一時的にクリア（renderBoardで画面が暗くならないように）
+          effectSelectMode = null;
+          renderBoard();
+          renderHand();
+          updateInfoBox();
+          // UI更新後にモードを再セットしてダイアログ表示
+          effectSelectMode = mode;
+          showSelectPlayerDialog();
+          return;
+        }
+        
+        // その他：効果完了を待つ
+        endPlayerTurn();
+      } else {
+        // 効果なし：ターン終了
+        endPlayerTurn();
+      }
+    });
+  }
+
+  function endPlayerTurn() {
+    computeScores();
+    renderHand();
+    checkGameEnd();
+
+    if (!gameOver) {
+      currentTurn = "C";
+      updateInfoBox();
+      // CPUのターン表示後、1秒待ってからCPUが行動開始（タイマーIDを保存）
+      cpuTurnTimerId = setTimeout(() => {
+        cpuTurnTimerId = null;
+        cpuTurn();
+      }, 1000);
+    }
+  }
+
+  /* ========================================
+     CPU行動
+  ======================================== */
+  function cpuTurn() {
+    if (gameOver) return;
+
+    // 手札3枚から選択（補充は配置後）
+    let best = null;
+    for (let hi = 0; hi < handC.length; hi++) {
+      const card = handC[hi];
+      // 効果条件チェック
+      if (!checkEffectCondition(card)) continue;
+      
+      for (let ci = 0; ci < 16; ci++) {
+        const cell = board[ci];
+        if (!canPlaceAt(card, ci + 1)) continue;
+        if (!canPlaceFaceUp(card, cell)) continue;
+
+        // 自分のカードへの上書きは、点数が上がる場合のみ
+        if (cell.card && cell.card.owner === "C" && card.points <= cell.card.points) {
+          continue;
+        }
+
+        const score = card.points + (cell.card ? 0.5 : 0);
+        if (!best || score > best.score) {
+          best = { hi, ci, score, overwrite: !!cell.card };
+        }
+      }
+    }
+
+    if (best) {
+      const card = handC[best.hi];
+      const cell = board[best.ci];
+      const prev = cell.card;
+      const habitat = getHabitatName(best.ci);
+
+      cell.facedown = false;
+      cell.card = { ...card, owner: "C" };
+
+      handC.splice(best.hi, 1);
+
+      if (prev) {
+        log(`CPU： ${card.name} が ${prev.name} から [${habitat}] のニッチを奪った`, "cpu");
+      } else {
+        log(`CPU： ${card.name} が [${habitat}] のニッチを埋めた`, "cpu");
+      }
+
+      // 配置後に手札補充
+      refillHand(handC);
+
+      computeScores();
+      renderBoard();
+      renderHand();
+
+      // 「置いたとき」効果の有無をチェック
+      const effectId = hasOnPlaceEffect(card);
+
+      // エフェクト再生後に次の処理
+      playPlaceEffect(best.ci, prev ? "overwrite" : "place", "C").then(() => {
+        // エフェクト完了後にペナルティラベルを更新
+        updatePenaltyLabels();
+        
+        // エフェクト完了後に効果処理を開始
+        if (effectId) {
+          // 効果準備（ここでeffectSelectModeがセットされる）
+          prepareOnPlaceEffect(card, "C");
+          
+          const mode = effectSelectMode;
+          
+          if (!mode) {
+            // 対象なし等で効果が発動しなかった
+            checkGameEnd();
+            if (!gameOver) {
+              currentTurn = "P";
+              updateInfoBox();
+            }
+            return;
+          }
+          
+          // CPUの効果実行前にeffectSelectModeをクリア（ボードを暗くしないため）
+          const effectData = { ...mode };
+          effectSelectMode = null;
+          
+          // E01: アカミミガメ - ニホンイシガメを裏向き
+          if (effectData.type === "E01_EXEC") {
+            for (const targetIndex of effectData.targets) {
+              const cell = board[targetIndex];
+              cell.facedown = true;
+              cell.card = null;
+              log(`ニホンイシガメ が裏向きになった`, "effect");
+            }
+            renderBoard();
+            // 効果発動音が終わってから裏向きエフェクトを再生（300ms遅延）
+            if (effectData.targets.length > 0) {
+              effectDelayTimerId = setTimeout(() => {
+                effectDelayTimerId = null;
+                playFlipFacedownEffect(effectData.targets[0]).then(() => {
+                  checkGameEnd();
+                  if (!gameOver) {
+                    currentTurn = "P";
+                    updateInfoBox();
+                  }
+                });
+              }, 300);
+            } else {
+              checkGameEnd();
+              if (!gameOver) {
+                currentTurn = "P";
+                updateInfoBox();
+              }
+            }
+            return;
+          }
+          
+          // E02/E04: 自動実行（CPU用）
+          if (effectData.type === "E02_AUTO" || effectData.type === "E04_AUTO") {
+            const targetCell = board[effectData.target];
+            if (!targetCell.card) {
+              checkGameEnd();
+              if (!gameOver) {
+                currentTurn = "P";
+                updateInfoBox();
+              }
+              return;
+            }
+            
+            const targetName = targetCell.card.name;
+            targetCell.facedown = true;
+            targetCell.card = null;
+            log(`${targetName} が裏向きになった`, "effect");
+            renderBoard();
+            
+            // 効果発動音が終わってから裏向きエフェクトを開始（300ms遅延）
+            effectDelayTimerId = setTimeout(() => {
+              effectDelayTimerId = null;
+              playFlipFacedownEffect(effectData.target).then(() => {
+                checkGameEnd();
+                if (!gameOver) {
+                  currentTurn = "P";
+                  updateInfoBox();
+                }
+              });
+            }, 300);
+            return;
+          }
+          
+          // E03: ウシガエル - 自動実行（CPU用）
+          if (effectData.type === "E03_AUTO") {
+            if (deck.length === 0) {
+              checkGameEnd();
+              if (!gameOver) {
+                currentTurn = "P";
+                updateInfoBox();
+              }
+              return;
+            }
+            
+            deck.pop();
+            board[effectData.target].facedown = true;
+            board[effectData.target].card = null;
+            updateCounts();
+            renderBoard();
+            
+            // 効果発動音が終わってから裏向き配置エフェクトを開始（300ms遅延）
+            effectDelayTimerId = setTimeout(() => {
+              effectDelayTimerId = null;
+              playPlaceEffect(effectData.target, "facedown", "C").then(() => {
+                checkGameEnd();
+                if (!gameOver) {
+                  currentTurn = "P";
+                  updateInfoBox();
+                }
+              });
+            }, 300);
+            return;
+          }
+          
+          // E06: ニホンザル - CPU実行（プレイヤーの手札を入れ替え）
+          if (effectData.type === "E06_CPU_EXEC") {
+            executeE06Effect(effectData.target);
+            checkGameEnd();
+            if (!gameOver) {
+              currentTurn = "P";
+              updateInfoBox();
+            }
+            return;
+          }
+          
+          // E05: CPU用（効果は既に完了している）
+          // effectSelectModeは既にクリア済み
+          
+          // 効果完了を待つ
+          waitForEffectAndEndCpuTurn();
+          return;
+        }
+
+        checkGameEnd();
+        if (!gameOver) {
+          currentTurn = "P";
+          updateInfoBox();
+        }
+      });
+    } else {
+      const empties = board.filter(c => canPlaceFaceDown(c));
+
+      if (empties.length > 0 && handC.length > 0) {
+        handC.shift(); // 手札から1枚消費
+
+        const pick = empties[Math.floor(Math.random() * empties.length)];
+        const pickIndex = board.indexOf(pick);
+        const habitat = getHabitatName(pickIndex);
+        pick.facedown = true;
+        pick.card = null;
+
+        log(`CPU： [${habitat}] に裏向きで置いた`, "cpu");
+
+        // 配置後に手札補充
+        refillHand(handC);
+
+        computeScores();
+        renderBoard();
+        renderHand();
+        
+        // エフェクト再生後に次の処理
+        playPlaceEffect(pickIndex, "facedown", "C").then(() => {
+          checkGameEnd();
+          if (!gameOver) {
+            currentTurn = "P";
+            updateInfoBox();
+          }
+        });
+      } else {
+        computeScores();
+        renderBoard();
+        renderHand();
+        checkGameEnd();
+        if (!gameOver) {
+          currentTurn = "P";
+          updateInfoBox();
+        }
+      }
+    }
+  }
+
+  // CPUの効果完了を待ってターン終了
+  function waitForEffectAndEndCpuTurn() {
+    const checkEffect = () => {
+      if (effectSelectMode === null) {
+        renderBoard();
+        renderHand();
+        checkGameEnd();
+        if (!gameOver) {
+          currentTurn = "P";
+          updateInfoBox();
+        }
+      } else {
+        setTimeout(checkEffect, 100);
+      }
+    };
+    setTimeout(checkEffect, 100);
+  }
+
+  /* ========================================
+     ゲーム終了判定
+  ======================================== */
+  function hasLegalMove(owner) {
+    const hand = owner === "P" ? handP : handC;
+
+    for (const card of hand) {
+      // 効果条件をチェック
+      if (!checkEffectCondition(card)) continue;
+      
+      for (const cell of board) {
+        if (canPlaceAt(card, cell.no) && canPlaceFaceUp(card, cell)) {
+          return true;
+        }
+      }
+    }
+
+    if (hand.length > 0 && board.some(c => canPlaceFaceDown(c))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function checkGameEnd() {
+    updateCounts();
+
+    const allFilled = board.every(c => c.facedown || c.card);
+    const noResources = deck.length === 0 && handP.length === 0 && handC.length === 0;
+    const stuck = deck.length === 0 && !hasLegalMove("P") && !hasLegalMove("C");
+
+    if (allFilled || noResources || stuck) {
+      endGame();
+    }
+  }
+
+  function endGame() {
+    if (gameOver) return;
+    gameOver = true;
+
+    const p = Number($scoreP.textContent);
+    const c = Number($scoreC.textContent);
+
+    if (p > c) {
+      log(`ゲーム終了： あなたの勝利`);
+    } else if (p < c) {
+      log(`ゲーム終了： CPUの勝利`);
+    } else {
+      log(`ゲーム終了： 引き分け`);
+    }
+
+    renderHand();
+    updateInfoBox();
+
+    // ボードの状態をキャプチャ（リザルト画面表示前に）
+    captureBoardHtml();
+
+    // 少し遅らせてリザルト画面を表示（タイマーIDを保存）
+    resultScreenTimerId = setTimeout(() => {
+      resultScreenTimerId = null;
+      showResultScreen(p, c);
+    }, 1000);
+  }
+
+  function showResultScreen(playerScore, cpuScore) {
+    // ゲーム終了音を再生
+    playSoundGameEnd();
+    
+    // スコア表示
+    $resultScoreP.textContent = playerScore;
+    $resultScoreC.textContent = cpuScore;
+
+    // 勝敗表示
+    if (playerScore > cpuScore) {
+      $resultWinner.textContent = "あなたの勝利";
+      $resultWinner.className = "result-winner player-win";
+    } else if (playerScore < cpuScore) {
+      $resultWinner.textContent = "CPUの勝利";
+      $resultWinner.className = "result-winner cpu-win";
+    } else {
+      $resultWinner.textContent = "引き分け";
+      $resultWinner.className = "result-winner draw";
+    }
+
+    // 生息していた動物を生活空間ごとに集計
+    const wetland = [];   // 湿地（セル1, 5, 9, 13）
+    const grassland = []; // 草原（セル2, 6, 10, 14）
+    const forest = [];    // 森林（林床: 3,7,11,15 + 樹上: 4,8,12,16）
+
+    const wetlandCells = [0, 4, 8, 12];   // index 0-based
+    const grasslandCells = [1, 5, 9, 13];
+    const forestCells = [2, 3, 6, 7, 10, 11, 14, 15]; // 林床+樹上
+
+    for (let i = 0; i < 16; i++) {
+      const cell = board[i];
+      if (cell.card && !cell.facedown) {
+        const name = cell.card.name;
+        if (wetlandCells.includes(i) && !wetland.includes(name)) {
+          wetland.push(name);
+        }
+        if (grasslandCells.includes(i) && !grassland.includes(name)) {
+          grassland.push(name);
+        }
+        if (forestCells.includes(i) && !forest.includes(name)) {
+          forest.push(name);
+        }
+      }
+    }
+
+    // 動物リストをHTML化（動物がいない場合は「なし」）
+    let animalsHtml = '';
+    
+    animalsHtml += `<div class="result-habitat">
+      <div class="result-habitat-name wetland">【湿地】</div>
+      <div class="result-animal-list">${wetland.length > 0 ? wetland.join('、') : 'なし'}</div>
+    </div>`;
+    
+    animalsHtml += `<div class="result-habitat">
+      <div class="result-habitat-name grassland">【草原】</div>
+      <div class="result-animal-list">${grassland.length > 0 ? grassland.join('、') : 'なし'}</div>
+    </div>`;
+    
+    animalsHtml += `<div class="result-habitat">
+      <div class="result-habitat-name forest">【森林】</div>
+      <div class="result-animal-list">${forest.length > 0 ? forest.join('、') : 'なし'}</div>
+    </div>`;
+
+    $resultAnimals.innerHTML = animalsHtml;
+
+    // 合計点と評価を表示
+    const totalScore = playerScore + cpuScore;
+    let evaluation = '';
+    if (totalScore <= 22) {
+      evaluation = '多様な動物が生息しにくい環境のようだ。';
+    } else if (totalScore <= 30) {
+      evaluation = '一定の動物が生息できる環境のようだ。京都の自然に近い。';
+    } else if (totalScore <= 39) {
+      evaluation = '多様な動物が生息できる豊かな環境のようだ。';
+    } else {
+      evaluation = '多様な動物が生息し、生態系として理想に近い環境のようだ。';
+    }
+
+    // 評価表示用のHTML要素を追加
+    let evalContainer = document.getElementById('resultEvaluation');
+    if (!evalContainer) {
+      evalContainer = document.createElement('div');
+      evalContainer.id = 'resultEvaluation';
+      evalContainer.className = 'result-evaluation';
+      $resultAnimals.parentNode.insertBefore(evalContainer, $resultAnimals.nextSibling);
+    }
+    evalContainer.innerHTML = `
+      <div class="eval-total">合計 ${totalScore}点</div>
+      <div class="eval-text">評価： ${evaluation}</div>
+    `;
+
+    // リザルト画面を表示
+    $resultScreen.classList.remove("hidden");
+  }
+
+  // リザルト画面用のボードHTML保存変数
+  let capturedBoardHtml = null;
+
+  /* ========================================
+     タイトル画面に戻る共通処理
+  ======================================== */
+  function returnToTitle() {
+    // 予約されたタイマーをキャンセル（バグ防止）
+    if (resultScreenTimerId !== null) {
+      clearTimeout(resultScreenTimerId);
+      resultScreenTimerId = null;
+    }
+    if (cpuTurnTimerId !== null) {
+      clearTimeout(cpuTurnTimerId);
+      cpuTurnTimerId = null;
+    }
+    if (effectDelayTimerId !== null) {
+      clearTimeout(effectDelayTimerId);
+      effectDelayTimerId = null;
+    }
+    
+    // ゲーム状態を完全リセット
+    deck.length = 0;
+    handP.length = 0;
+    handC.length = 0;
+    board.forEach(cell => {
+      cell.card = null;
+      cell.facedown = false;
+    });
+    
+    scoreP = 0;
+    scoreC = 0;
+    currentTurn = null;
+    gameOver = false;
+    effectSelectMode = null;
+    selectedHandIndex = null;
+    selectedMode = null;
+    
+    // UI要素をリセット
+    $scoreP.textContent = "0";
+    $scoreC.textContent = "0";
+    $deckCount.textContent = "0";
+    $log.textContent = "";
+    logQueue.length = 0; // ログキューもクリア
+    
+    // リザルト画面の内容をクリア
+    $resultAnimals.innerHTML = "";
+    const evalContainer = document.getElementById('resultEvaluation');
+    if (evalContainer) {
+      evalContainer.remove();
+    }
+    capturedBoardHtml = null;
+    
+    // UI要素を非表示
+    $resultScreen.classList.add("hidden");
+    $modal.classList.remove("show");
+    $ruleModal.classList.remove("show");
+    $selectPlayerDialog.classList.add("hidden");
+    
+    // タイトル画面に戻る
+    $startScreen.classList.remove("hidden");
+    
+    // スクロール位置をリセット（画面表示後に実行）
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      $resultScreen.scrollTop = 0;
+      $startScreen.scrollTop = 0;
+    }, 0);
+  }
+
+  /* ========================================
+     イベントリスナー
+  ======================================== */
+  $btnNew.addEventListener("click", returnToTitle);
+
+  $btnCancel.addEventListener("click", () => {
+    cancelSelection();
+  });
+
+  // スタート画面のイベントリスナー
+  $btnStart.addEventListener("click", () => {
+    $startScreen.classList.add("hidden");
+    startGame();
+  });
+
+  $btnRule.addEventListener("click", () => {
+    // スクロール位置をリセット
+    const ruleContent = $ruleModal.querySelector(".rule-content");
+    if (ruleContent) ruleContent.scrollTop = 0;
+    $ruleModal.classList.add("show");
+  });
+
+  $btnRuleClose.addEventListener("click", () => {
+    $ruleModal.classList.remove("show");
+  });
+
+  // ゲーム画面のルール説明ボタン
+  $btnRuleGame.addEventListener("click", () => {
+    // スクロール位置をリセット
+    const ruleContent = $ruleModal.querySelector(".rule-content");
+    if (ruleContent) ruleContent.scrollTop = 0;
+    $ruleModal.classList.add("show");
+  });
+
+  $ruleModal.addEventListener("click", (e) => {
+    if (e.target === $ruleModal) {
+      $ruleModal.classList.remove("show");
+    }
+  });
+
+  // リザルト画面のイベントリスナー
+  $btnShowBoard.addEventListener("click", () => {
+    // 保存したボードHTMLをモーダルで表示
+    if (capturedBoardHtml) {
+      showBoardModal(capturedBoardHtml);
+    }
+  });
+
+  $btnResultTitle.addEventListener("click", returnToTitle);
+
+  // ボードのHTMLを保存
+  function captureBoardHtml() {
+    capturedBoardHtml = $board.cloneNode(true);
+    // クローンのスタイルを調整
+    capturedBoardHtml.style.width = "100%";
+    capturedBoardHtml.style.height = "auto";
+    capturedBoardHtml.style.maxWidth = "90vw";
+    capturedBoardHtml.style.maxHeight = "85vh";
+    
+    // エフェクトクラスを削除（アニメーションが残らないように）
+    const tokenWraps = capturedBoardHtml.querySelectorAll(".tokenWrap");
+    tokenWraps.forEach(tw => {
+      tw.classList.remove("effect-place", "effect-overwrite", "effect-overwrite-player", "effect-overwrite-cpu", "effect-facedown", "effect-flip-facedown");
+    });
+  }
+
+  // ボードモーダル表示
+  function showBoardModal(boardClone) {
+    // モーダル内容を一時的にボードに差し替え
+    $modalImg.style.display = "none";
+    
+    // 既存のボードクローンがあれば削除
+    const existingClone = $modal.querySelector(".board-clone");
+    if (existingClone) existingClone.remove();
+    
+    const wrapper = document.createElement("div");
+    wrapper.className = "board-clone";
+    wrapper.style.cssText = "width:85vmin;height:85vmin;max-width:600px;max-height:600px;position:relative;";
+    
+    const clone = boardClone.cloneNode(true);
+    clone.style.width = "100%";
+    clone.style.height = "100%";
+    wrapper.appendChild(clone);
+    
+    const modalContent = $modal.querySelector(".modal-content");
+    modalContent.appendChild(wrapper);
+    
+    // スクロール位置をリセット
+    modalContent.scrollTop = 0;
+    
+    $modal.classList.add("show");
+  }
+
+  // モーダルを閉じるときの処理を拡張
+  function hideModalExtended() {
+    $modal.classList.remove("show");
+    $modalImg.style.display = "";
+    const clone = $modal.querySelector(".board-clone");
+    if (clone) clone.remove();
+    // 複数カード表示をクリア
+    const cards = $modal.querySelector(".modal-cards");
+    if (cards) cards.remove();
+    const title = $modal.querySelector(".modal-title");
+    if (title) title.remove();
+
+    // E05効果でモーダルを閉じた場合、ターン終了
+    if (effectSelectMode !== null && effectSelectMode.type === "E05_VIEW") {
+      effectSelectMode = null;
+      renderBoard();
+      endPlayerTurn();
+    }
+  }
+
+  $modalClose.addEventListener("click", hideModalExtended);
+  $modal.addEventListener("click", (e) => {
+    if (e.target === $modal) hideModalExtended();
+  });
+
+  // E06プレイヤー選択ダイアログのイベントリスナー
+  $btnSelectSelf.addEventListener("click", () => {
+    hideSelectPlayerDialog();
+    executeE06Effect("P");
+    effectSelectMode = null;
+    renderBoard();
+    renderHand();
+    endPlayerTurn();
+  });
+
+  $btnSelectCPU.addEventListener("click", () => {
+    hideSelectPlayerDialog();
+    executeE06Effect("C");
+    effectSelectMode = null;
+    renderBoard();
+    renderHand();
+    endPlayerTurn();
+  });
+
+  let resizeScheduled = false;
+  window.addEventListener("resize", () => {
+    if (resizeScheduled) return;
+    resizeScheduled = true;
+    requestAnimationFrame(() => {
+      resizeScheduled = false;
+      fitBoard();
+    });
+  });
+
+  /* ========================================
+     ゲーム開始
+  ======================================== */
+  function startGame() {
+    gameOver = false;
+    selectedHandIndex = null;
+    selectedMode = null;
+    effectSelectMode = null;
+    $log.textContent = "";
+
+    // E06ダイアログが開いていれば閉じる
+    hideSelectPlayerDialog();
+    
+    // ゲーム開始音を再生
+    playSoundGameStart();
+    
+    // スクロール位置をリセット
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    $resultScreen.scrollTop = 0;
+    $startScreen.scrollTop = 0;
+
+    buildCells();
+    fitBoard();
+
+    allCards = loadCards();
+
+    const preload = (src) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = src;
+    };
+    for (let i = 0; i < Math.min(6, allCards.length); i++) {
+      preload(allCards[i].handImgPath);
+      preload(allCards[i].tokenImgPath);
+    }
+    preload(TOKEN_BACK);
+    preload(CARD_BACK);
+
+    deck = shuffle([...allCards]);
+    handP = [];
+    handC = [];
+    refillHand(handP);
+    refillHand(handC);
+
+    board = Array.from({ length: 16 }, (_, i) => ({
+      index: i,
+      no: i + 1,
+      facedown: false,
+      card: null
+    }));
+
+    for (const v of cellViews) {
+      v.lastKey = "";
+      v.cardId = null;
+    }
+
+    currentTurn = "P";
+
+    computeScores();
+    renderBoard();
+    renderHand();
+    updateCounts();
+    updateInfoBox();
+
+    log(`ゲーム開始`);
+  }
+
+  /* ========================================
+     起動（スタート画面を表示したまま待機）
+  ======================================== */
+  // 初期化のみ（ゲームはスタートボタンで開始）
+  buildCells();
+  fitBoard();
+
+})();
+</script>
+</body>
+</html>
