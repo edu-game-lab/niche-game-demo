@@ -931,7 +931,13 @@ img.token{
       <p>（1）すでにカードが置いてあるマスでも、競争力が相手より高ければ上書きできる。（Aが最高）</p>
       <p>（2）条件に合うカードがない場合などは、手札から1枚選んで空きマスに裏向きで置くこともできる。（裏向きは0点）</p>
       <p>（3）裏向きカードがあるマスにはカードを置けない。</p>
-      <p>（4）置く条件がある、置いたときに効果が発生するカードもある。</p>
+      <p>（4）置く条件があるカード、置いたときに効果が発生するカードもある。</p>
+    </div>
+    <div class="rule-section">
+      <h3>■ 操作方法</h3>
+      <p>　3枚の手札から1枚を選んで、「表向きで置く」か「裏向きで置く」を押す。</p>
+      <p>　条件に合うマスを選んで、カードを置く。</p>
+      <p>　カードはクリックすれば拡大される。</p>
     </div>
     <div class="rule-section">
       <h3>■ ゲームの終了</h3>
@@ -996,7 +1002,7 @@ img.token{
       <div id="infoBox"><span class="message">手札を選択してください</span></div>
 
       <div class="handTitleRow">
-        <span class="handTitle">あなたの手札 <span class="small-note">（画像タップで拡大）</span></span>
+        <span class="handTitle">あなたの手札 <span class="small-note">（画像クリックで拡大）</span></span>
         <button id="btnCancel" class="btn-cancel" style="display:none;">キャンセル</button>
       </div>
       <div class="hand" id="handP"></div>
@@ -1775,7 +1781,7 @@ img.token{
       const ownerClass = cell.card.owner === "P" ? "owner-P" : "owner-C";
       view.tokenWrap.classList.add(ownerClass);
       
-      view.ownerLabel.textContent = cell.card.owner === "P" ? "プレイヤー" : "CPU";
+      view.ownerLabel.textContent = cell.card.owner === "P" ? "あなた" : "CPU";
       view.ownerLabel.className = "ownerLabel " + ownerClass;
       view.ownerLabel.style.display = "block";
     }
@@ -3312,11 +3318,11 @@ img.token{
     // 合計点と評価を表示
     const totalScore = playerScore + cpuScore;
     let evaluation = '';
-    if (totalScore <= 22) {
+    if (totalScore <= 24) {
       evaluation = '多様な動物が生息しにくい環境のようだ。';
-    } else if (totalScore <= 30) {
+    } else if (totalScore <= 32) {
       evaluation = '一定の動物が生息できる環境のようだ。京都の自然に近い。';
-    } else if (totalScore <= 39) {
+    } else if (totalScore <= 40) {
       evaluation = '多様な動物が生息できる豊かな環境のようだ。';
     } else {
       evaluation = '多様な動物が生息し、生態系として理想に近い環境のようだ。';
